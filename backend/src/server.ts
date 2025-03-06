@@ -5,7 +5,7 @@ import { resolvers } from './graphql/resolvers'; // Import all resolvers
 import { connectToDatabase, getPool } from './graphql/utils/dbConnection'; // Import database connection functions
 
 const app: Application = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 5000;
 
 // Connect to SQL Server
 connectToDatabase(); // Establish the database connection

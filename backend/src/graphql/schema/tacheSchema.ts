@@ -1,46 +1,56 @@
 import { gql } from 'apollo-server-express';
 
 export const tacheTypeDefs = gql`
-  type Tache {
-    id: ID!
-    nom_tache: String!
-    description_tache: String!
-    date_debut_tache: String!
-    date_fin_tache: String
-    statut_tache: StatutTache!
-    projet: Project!
-  }
-
   enum StatutTache {
-    TODO
-    IN_PROGRESS
-    END
-  }
+  TODO
+  IN_PROGRESS
+  END
+}
 
-  type Query {
-    taches: [Tache!]!
-    tache(id: ID!): Tache
-  }
+type Tache {
+  idTache: String!
+  title_tache: String!
+  description_tache: String
+  date_debut_tache: String!  # Changed from Date to String for simplicity
+  date_fin_tache: String    # Changed from Date to String for consistency
+  statut_tache: StatutTache!
+  dureeMax_tache: Int
+  projet: Project!
+}
 
-  type Mutation {
-    createTache(
-    nom_tache: String!
-    description_tache: String!
-    date_debut_tache: String!
-    dureeMax_Tache: Int!
+type DeleteTacheResponse {
+  success: Boolean!
+  message: String
+}
+
+extend type Query {
+  taches: [Tache!]!
+  tache(id: String!): Tache
+}
+
+extend type Mutation {
+  createTache(
+    title_tache: String!
+    description_tache: String
+    date_debut_tache: String!  # Changed from Date to String
+    date_fin_tache: String    # Changed from Date to String
     statut_tache: StatutTache!
-    projetId: ID!
-  ): Tache!
-    
-    updateTache(
-      id: ID!
-      nom_tache: String
-      description_tache: String
-      date_debut_tache: String
-      date_fin_tache: String
-      statut_tache: StatutTache
-    ): Tache!
-    
-    deleteTache(id: ID!): Boolean
-  }
+    dureeMax_tache: Int
+    idProjet: String!
+  ): Tache
+
+  updateTache(
+    id: String!
+    title_tache: String
+    description_tache: String
+    date_debut_tache: String  # Changed from Date to String
+    date_fin_tache: String    # Changed from Date to String
+    statut_tache: StatutTache
+    dureeMax_tache: Int
+  ): Tache
+
+  deleteTache(id: String!): DeleteTacheResponse
+}
+
+
 `;

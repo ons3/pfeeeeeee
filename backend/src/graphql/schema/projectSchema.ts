@@ -8,7 +8,7 @@ export const projectTypeDefs = gql`
     date_debut_projet: Date
     date_fin_projet: Date
     statut_project: StatutProject!
-    equipes: [Equipe!]!  # Many-to-many relationship with Equipe
+    equipes: [Equipe]  # Many-to-many relationship with Equipe
   }
 
   type DeleteProjectResponse {
