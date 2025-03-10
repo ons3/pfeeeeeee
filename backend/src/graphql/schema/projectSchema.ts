@@ -1,6 +1,7 @@
 import { gql } from "apollo-server-express";
 
 export const projectTypeDefs = gql`
+
   type Project {
     idProjet: String!
     nom_projet: String!
@@ -16,9 +17,17 @@ export const projectTypeDefs = gql`
     message: String
   }
 
+  # Input type for filtering projects
+  input ProjectFilterInput {
+    nom_projet: String
+    statut_project: StatutProject
+    date_debut_projet: Date
+  }
+
   extend type Query {
     projects: [Project!]!
     project(id: String!): Project
+    searchProjects(filters: ProjectFilterInput): [Project!]! # New search query
   }
 
   extend type Mutation {

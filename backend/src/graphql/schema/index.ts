@@ -3,8 +3,15 @@ import { projectTypeDefs } from "./projectSchema";
 import { equipeTypeDefs } from "./equipeSchema";
 import { relationshipTypeDefs } from "./relationshipSchema";
 import { tacheTypeDefs } from "./tacheSchema";
+import { utilisateurTypeDefs } from "./utilisateurSchema";
+import { alertTypeDefs } from "./alertSchema";
+import { suiviDeTempsTypeDefs } from "./suiviDeTempsSchema";
 
 
+
+
+
+// Combine all type definitions into one
 export const typeDefs = gql`
   scalar Date
 
@@ -24,8 +31,12 @@ export const typeDefs = gql`
     _empty: String  # Placeholder field (required if Mutation is empty)
   }
 
+  # Include all the imported type definitions
   ${projectTypeDefs}
   ${equipeTypeDefs}
   ${relationshipTypeDefs}
   ${tacheTypeDefs}
+  ${utilisateurTypeDefs}
+  ${alertTypeDefs}
+  ${suiviDeTempsTypeDefs}
 `;

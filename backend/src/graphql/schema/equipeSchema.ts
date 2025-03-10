@@ -13,9 +13,16 @@ export const equipeTypeDefs = gql`
     message: String
   }
 
+  # Input type for filtering equipes
+  input EquipeFilterInput {
+    nom_equipe: String
+    description_equipe: String
+  }
+
   extend type Query {
     equipes: [Equipe!]!
     equipe(id: String!): Equipe
+    searchEquipes(filters: EquipeFilterInput): [Equipe!]! # New search query
   }
 
   extend type Mutation {

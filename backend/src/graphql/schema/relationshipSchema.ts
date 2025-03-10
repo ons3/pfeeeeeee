@@ -6,6 +6,7 @@ export const relationshipTypeDefs = gql`
       idProjet: String!
       idEquipe: String!
     ): Project
+
     removeEquipeFromProject(
       idProjet: String!
       idEquipe: String!

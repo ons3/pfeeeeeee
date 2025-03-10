@@ -21,15 +21,13 @@ export const tacheResolvers = {
           LEFT JOIN Projects p ON t.idProjet = p.idProjet
         `);
 
-        return result.recordset.map(tache => ({
-          ...tache,
-          projet: tache.idProjet
-            ? {
-                idProjet: tache.idProjet,
-                nom_projet: tache.projet_name,
-                description_projet: tache.projet_description
-              }
-            : null
+        return result.recordset.map(tach => ({
+          ...tach,
+          projet: tach.idProjet ? {
+              idProjet: tach.idProjet,
+              nom_projet: tach.projet_name,
+              description_projet: tach.projet_description,
+            } : null,
         }));
       } catch (error) {
         console.error("Error fetching taches:", error);
@@ -62,24 +60,88 @@ export const tacheResolvers = {
           throw new Error("Tache not found");
         }
 
-        const tache = result.recordset[0];
+        const tach = result.recordset[0];
         return {
-          ...tache,
-          projet: tache.idProjet
-            ? {
-                idProjet: tache.idProjet,
-                nom_projet: tache.projet_name,
-                description_projet: tache.projet_description
-              }
-            : null
+          ...tach,
+          projet: tach.idProjet ? {
+              idProjet: tach.idProjet,
+              nom_projet: tach.projet_name,
+              description_projet: tach.projet_description,
+            } : null,
         };
       } catch (error) {
         console.error("Error fetching tache:", error);
         throw new Error("Error fetching tache");
       }
+    },
+
+    // New resolver for searching tasks (taches)
+    searchTaches: async (
+      _: any,
+      { filters }: { filters?: { title_tache?: string; description_tache?: string; statut_tache?: string } },
+      { pool }: { pool: sql.ConnectionPool }
+    ) => {
+      try {
+        let query = `
+          SELECT 
+            t.idTache, 
+            t.title_tache,
+            t.description_tache,
+            t.date_debut_tache,
+            t.date_fin_tache,
+            t.statut_tache,
+            t.dureeMax_tache,
+            p.idProjet,
+            p.nom_projet AS projet_name,
+            p.description_projet AS projet_description
+          FROM Taches t
+          LEFT JOIN Projects p ON t.idProjet = p.idProjet
+        `;
+        
+        const conditions = [];
+        const inputs = [];
+
+        // Add filters dynamically based on provided arguments
+        if (filters?.title_tache) {
+          conditions.push("t.title_tache LIKE @title_tache");
+          inputs.push({ name: "title_tache", type: sql.VarChar, value: `%${filters.title_tache}%` });
+        }
+
+        if (filters?.description_tache) {
+          conditions.push("t.description_tache LIKE @description_tache");
+          inputs.push({ name: "description_tache", type: sql.VarChar, value: `%${filters.description_tache}%` });
+        }
+
+        if (filters?.statut_tache) {
+          conditions.push("t.statut_tache = @statut_tache");
+          inputs.push({ name: "statut_tache", type: sql.VarChar, value: filters.statut_tache });
+        }
+
+        // Append WHERE clause if there are conditions
+        if (conditions.length > 0) {
+          query += " WHERE " + conditions.join(" AND ");
+        }
+
+        const request = pool.request();
+        inputs.forEach((input) => request.input(input.name, input.type, input.value));
+
+        const result = await request.query(query);
+        
+        return result.recordset.map(t => ({
+          ...t,
+          projet : t.idProjet ? {
+             idProjet :t.idProjet ,
+             nom_projet :t.projet_name ,
+             description_projet :t.projet_description ,
+           } : null
+         }));
+        
+      } catch (error) {
+        console.error("Error searching tasks:", error);
+        throw new Error("Error searching tasks");
+      }
     }
   },
-
   Mutation: {
     createTache: async (
       _: any,

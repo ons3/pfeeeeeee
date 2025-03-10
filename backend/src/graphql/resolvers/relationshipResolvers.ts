@@ -20,7 +20,7 @@ export const relationshipResolvers = {
           `);
     
         if (existingRelationship.recordset.length > 0) {
-          throw new Error("This Equipes is already associated with this project.");
+          throw new Error("This Equipe is already associated with this project.");
         }
     
         // Insert the new relationship
@@ -32,14 +32,14 @@ export const relationshipResolvers = {
             VALUES (@idProjet, @idEquipe);
           `);
     
+        // Return the updated project with the newly associated equipe
         return await projectResolvers.Query.project(_, { id: idProjet }, { pool });
       } catch (error) {
+        console.error("Error adding Equipe to project:", error);
         if (error instanceof Error) {
-          console.error("Error adding Equipes to project:", error.message);
-          throw new Error("Error adding Equipes to project: " + error.message);
+          throw new Error(`Error adding Equipe to project: ${error.message}`);
         } else {
-          console.error("Error adding Equipes to project:", error);
-          throw new Error("Error adding Equipes to project: " + error);
+          throw new Error("Error adding Equipe to project: Unknown error");
         }
       }
     },
@@ -73,16 +73,16 @@ export const relationshipResolvers = {
             WHERE idProjet = @idProjet AND idEquipe = @idEquipe;
           `);
     
+        // Return the updated project after removing the equipe
         return await projectResolvers.Query.project(_, { id: idProjet }, { pool });
       } catch (error) {
+        console.error("Error removing Equipe from project:", error);
         if (error instanceof Error) {
-          console.error("Error removing Equipe from project:", error.message);
-          throw new Error("Error removing Equipe from project: " + error.message);
+          throw new Error(`Error removing Equipe from project: ${error.message}`);
         } else {
-          console.error("Error removing Equipe from project:", error);
-          throw new Error("Error removing Equipe from project: " + error);
+          throw new Error("Error removing Equipe from project: Unknown error");
         }
       }
     },
-  },    
+  },
 };

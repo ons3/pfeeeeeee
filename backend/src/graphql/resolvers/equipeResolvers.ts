@@ -14,6 +14,48 @@ export const equipeResolvers = {
         console.error("Error fetching equipes:", error);
         throw new Error("Error fetching equipes");
       }
+    },
+
+    // New resolver for searching equipes
+    searchEquipes: async (
+      _: any,
+      { filters }: { filters: { nom_equipe?: string; description_equipe?: string } },
+      { pool }: { pool: sql.ConnectionPool }
+    ) => {
+      try {
+        let query = `
+          SELECT idEquipe, nom_equipe, description_equipe
+          FROM Equipes
+        `;
+        const conditions: string[] = [];
+        const inputs: { name: string; type: any; value: any }[] = [];
+
+        // Add filters dynamically based on provided arguments
+        if (filters.nom_equipe) {
+          conditions.push("nom_equipe LIKE @nom_equipe");
+          inputs.push({ name: "nom_equipe", type: sql.VarChar, value: `%${filters.nom_equipe}%` });
+        }
+
+        if (filters.description_equipe) {
+          conditions.push("description_equipe LIKE @description_equipe");
+          inputs.push({ name: "description_equipe", type: sql.VarChar, value: `%${filters.description_equipe}%` });
+        }
+
+        // Append WHERE clause if there are conditions
+        if (conditions.length > 0) {
+          query += " WHERE " + conditions.join(" AND ");
+        }
+
+        const request = pool.request();
+        inputs.forEach((input) => request.input(input.name, input.type, input.value));
+
+        const result = await request.query(query);
+        return result.recordset || []; // Return an empty array instead of null if no records found
+
+      } catch (error) {
+        console.error("Error searching equipes:", error);
+        throw new Error("Error searching equipes");
+      }
     }
   },
 
@@ -29,10 +71,10 @@ export const equipeResolvers = {
             WHERE pe.idEquipe = @idEquipe;
           `);
 
-        return projectsResult.recordset || []; // Retourne une liste vide au lieu de `null`
+        return projectsResult.recordset || []; // Return an empty array instead of null if no projects found
       } catch (error) {
         console.error("Error fetching projets for equipe:", error);
-        return []; // En cas d'erreur, retourne une liste vide
+        return []; // Return an empty array in case of error
       }
     }
   },
@@ -67,57 +109,50 @@ export const equipeResolvers = {
     },
 
     updateEquipe: async (
-  _: any,
-  { id, nom_equipe, description_equipe }: {
-    id: string;
-    nom_equipe?: string;
-    description_equipe?: string;
-  },
-  { pool }: { pool: sql.ConnectionPool }
-) => {
-  try {
-    let query = 'UPDATE Equipes SET ';
-    const inputs = [];
+      _: any,
+      { id, nom_equipe, description_equipe }: {
+        id: string;
+        nom_equipe?: string;
+        description_equipe?: string;
+      },
+      { pool }: { pool: sql.ConnectionPool }
+    ) => {
+      try {
+        let query = 'UPDATE Equipes SET ';
+        const inputs = [];
 
-    if (nom_equipe) {
-      query += 'nom_equipe = @nom_equipe, ';
-      inputs.push({ name: 'nom_equipe', type: sql.VarChar, value: nom_equipe });
-    }
+        if (nom_equipe) {
+          query += 'nom_equipe = @nom_equipe, ';
+          inputs.push({ name: 'nom_equipe', type: sql.VarChar, value: nom_equipe });
+        }
 
-    if (description_equipe) {
-      query += 'description_equipe = @description_equipe, ';
-      inputs.push({ name: 'description_equipe', type: sql.VarChar, value: description_equipe });
-    }
+        if (description_equipe) {
+          query += 'description_equipe = @description_equipe, ';
+          inputs.push({ name: 'description_equipe', type: sql.VarChar, value: description_equipe });
+        }
 
-    query = query.slice(0, -2) + ' WHERE idEquipe = @id';
-    inputs.push({ name: 'id', type: sql.UniqueIdentifier, value: id });
+        query = query.slice(0, -2) + ' WHERE idEquipe = @id';
+        inputs.push({ name: 'id', type: sql.UniqueIdentifier, value: id });
 
-    const request = pool.request();
-    inputs.forEach((input) => request.input(input.name, input.type, input.value));
-    await request.query(query);
+        const request = pool.request();
+        inputs.forEach((input) => request.input(input.name, input.type, input.value));
+        
+        await request.query(query);
 
-    const updatedEquipe = await pool.request()
-      .input('id', sql.UniqueIdentifier, id)
-      .query(`
-        SELECT idEquipe, nom_equipe, description_equipe
-        FROM Equipes
-        WHERE idEquipe = @id;
-      `);
+        const updatedEquipe = await pool.request()
+          .input('id', sql.UniqueIdentifier, id)
+          .query(`
+            SELECT idEquipe, nom_equipe, description_equipe
+            FROM Equipes
+            WHERE idEquipe = @id;
+          `);
 
-    return updatedEquipe.recordset[0];
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error("Error updating equipe:", error.message);
-    } else {
-      console.error("Error updating equipe:", error);
-    }
-    if (error instanceof Error) {
-      throw new Error("Error updating equipe: " + error.message);
-    } else {
-      throw new Error("Error updating equipe: " + String(error));
-    }
-  }
-},
+        return updatedEquipe.recordset[0];
+      } catch (error) {
+        console.error("Error updating equipe:", error);
+        throw new Error("Error updating equipe");
+      }
+    },
 
     deleteEquipe: async (_: any, { id }: { id: string }, { pool }: { pool: sql.ConnectionPool }) => {
       try {
