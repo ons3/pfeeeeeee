@@ -7,12 +7,35 @@ export const equipeResolvers = {
       try {
         const result = await pool.request().query(`
           SELECT idEquipe, nom_equipe, description_equipe
-          FROM Equipes;
+          FROM Equipe;
         `);
         return result.recordset;
       } catch (error) {
         console.error("Error fetching equipes:", error);
-        throw new Error("Error fetching equipes");
+        if (error instanceof Error) {
+          throw new Error(`Error fetching equipes: ${error.message}`);
+        } else {
+          throw new Error("Error fetching equipes: unknown error");
+        }
+      }
+    },
+    equipe: async (_: any, { id }: { id: string }, { pool }: { pool: sql.ConnectionPool }) => {
+      try {
+        const request = pool.request();
+        request.input('id', sql.UniqueIdentifier, id); // Assuming idEquipe is a UUID
+        const result = await request.query(`
+          SELECT idEquipe, nom_equipe, description_equipe
+          FROM Equipe
+          WHERE idEquipe = @id;
+        `);
+
+        if (result.recordset.length === 0) {
+          throw new Error('Equipe not found');
+        }
+        return result.recordset[0];
+      } catch (error) {
+        console.error('Error fetching equipe:', error);
+        throw new Error('Error fetching equipe');
       }
     },
 
@@ -25,7 +48,7 @@ export const equipeResolvers = {
       try {
         let query = `
           SELECT idEquipe, nom_equipe, description_equipe
-          FROM Equipes
+          FROM Equipe
         `;
         const conditions: string[] = [];
         const inputs: { name: string; type: any; value: any }[] = [];
@@ -54,7 +77,11 @@ export const equipeResolvers = {
 
       } catch (error) {
         console.error("Error searching equipes:", error);
-        throw new Error("Error searching equipes");
+        if (error instanceof Error) {
+          throw new Error(`Error searching equipes: ${error.message}`);
+        } else {
+          throw new Error("Error searching equipes: unknown error");
+        }
       }
     }
   },
@@ -93,7 +120,7 @@ export const equipeResolvers = {
           .input('nom_equipe', sql.VarChar, nom_equipe)
           .input('description_equipe', sql.VarChar, description_equipe || '')
           .query(`
-            INSERT INTO Equipes (idEquipe, nom_equipe, description_equipe)
+            INSERT INTO Equipe (idEquipe, nom_equipe, description_equipe)
             VALUES (@idEquipe, @nom_equipe, @description_equipe);
           `);
 
@@ -104,7 +131,11 @@ export const equipeResolvers = {
         };
       } catch (error) {
         console.error("Error creating equipe:", error);
-        throw new Error("Error creating equipe");
+        if (error instanceof Error) {
+          throw new Error(`Error creating equipe: ${error.message}`);
+        } else {
+          throw new Error("Error creating equipe: unknown error");
+        }
       }
     },
 
@@ -118,7 +149,7 @@ export const equipeResolvers = {
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        let query = 'UPDATE Equipes SET ';
+        let query = 'UPDATE Equipe SET ';
         const inputs = [];
 
         if (nom_equipe) {
@@ -143,14 +174,18 @@ export const equipeResolvers = {
           .input('id', sql.UniqueIdentifier, id)
           .query(`
             SELECT idEquipe, nom_equipe, description_equipe
-            FROM Equipes
+            FROM Equipe
             WHERE idEquipe = @id;
           `);
 
         return updatedEquipe.recordset[0];
       } catch (error) {
         console.error("Error updating equipe:", error);
-        throw new Error("Error updating equipe");
+        if (error instanceof Error) {
+          throw new Error(`Error updating equipe: ${error.message}`);
+        } else {
+          throw new Error("Error updating equipe: unknown error");
+        }
       }
     },
 
@@ -158,7 +193,7 @@ export const equipeResolvers = {
       try {
         const result = await pool.request()
           .input('id', sql.UniqueIdentifier, id)
-          .query('DELETE FROM Equipes WHERE idEquipe = @id');
+          .query('DELETE FROM Equipe WHERE idEquipe = @id');
 
         if (result.rowsAffected[0] > 0) {
           return {
@@ -173,7 +208,11 @@ export const equipeResolvers = {
         }
       } catch (error) {
         console.error("Error deleting equipe:", error);
-        throw new Error("Error deleting equipe");
+        if (error instanceof Error) {
+          throw new Error(`Error deleting equipe: ${error.message}`);
+        } else {
+          throw new Error("Error deleting equipe: unknown error");
+        }
       }
     },
   },

@@ -1,18 +1,18 @@
-import sql from 'mssql';
 import { v4 as uuidv4 } from 'uuid';
+import sql from 'mssql';
 
-export const projectResolvers = {
+export const projetResolvers = {
   Query: {
     // Fetch all projects with optional search and filter criteria
-    searchProjects: async (
+    searchProjets: async (
       _: any,
-      { filters }: { filters: { nom_projet?: string; statut_project?: string; date_debut_projet?: string } },
+      { filters }: { filters: { nom_projet?: string; statut_projet?: string; date_debut_projet?: string } },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
         let query = `
-          SELECT idProjet, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_project
-          FROM Projects
+          SELECT idProjet, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_projet
+          FROM Projet
         `;
         const conditions: string[] = [];
         const inputs: { name: string; type: any; value: any }[] = [];
@@ -23,9 +23,9 @@ export const projectResolvers = {
           inputs.push({ name: "nom_projet", type: sql.VarChar, value: `%${filters.nom_projet}%` });
         }
 
-        if (filters.statut_project) {
-          conditions.push("statut_project = @statut_project");
-          inputs.push({ name: "statut_project", type: sql.VarChar, value: filters.statut_project });
+        if (filters.statut_projet) {
+          conditions.push("statut_projet = @statut_projet");
+          inputs.push({ name: "statut_projet", type: sql.VarChar, value: filters.statut_projet });
         }
 
         if (filters.date_debut_projet) {
@@ -50,8 +50,8 @@ export const projectResolvers = {
             .input("idProjet", sql.UniqueIdentifier, project.idProjet)
             .query(`
               SELECT e.idEquipe, e.nom_equipe, e.description_equipe
-              FROM Equipes e
-              INNER JOIN ProjectEquipe pe ON e.idEquipe = pe.idEquipe
+              FROM Equipe e
+              INNER JOIN ProjetEquipe pe ON e.idEquipe = pe.idEquipe
               WHERE pe.idProjet = @idProjet;
             `);
 
@@ -64,14 +64,13 @@ export const projectResolvers = {
         throw new Error("Error searching projects");
       }
     },
-  
 
     // Fetch all projects
-    projects: async (_: any, __: any, { pool }: { pool: sql.ConnectionPool }) => {
+    projets: async (_: any, __: any, { pool }: { pool: sql.ConnectionPool }) => {
       try {
         const result = await pool.request().query(`
-          SELECT idProjet, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_project
-          FROM Projects;
+          SELECT idProjet, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_projet
+          FROM Projet;
         `);
 
         const projects = result.recordset;
@@ -82,8 +81,8 @@ export const projectResolvers = {
             .input('idProjet', sql.UniqueIdentifier, project.idProjet)
             .query(`
               SELECT e.idEquipe, e.nom_equipe, e.description_equipe
-              FROM Equipes e
-              INNER JOIN ProjectEquipe pe ON e.idEquipe = pe.idEquipe
+              FROM Equipe e
+              INNER JOIN ProjetEquipe pe ON e.idEquipe = pe.idEquipe
               WHERE pe.idProjet = @idProjet;
             `);
 
@@ -98,18 +97,18 @@ export const projectResolvers = {
     },
 
     // Fetch a single project by ID
-    project: async (_: any, { id }: { id: string }, { pool }: { pool: sql.ConnectionPool }) => {
+    projet: async (_: any, { id }: { id: string }, { pool }: { pool: sql.ConnectionPool }) => {
       try {
         const result = await pool.request()
           .input('id', sql.UniqueIdentifier, id)
           .query(`
-            SELECT idProjet, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_project
-            FROM Projects
+            SELECT idProjet, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_projet
+            FROM Projet
             WHERE idProjet = @id;
           `);
 
         if (result.recordset.length === 0) {
-          throw new Error('Project not found');
+          throw new Error('Projet not found');
         }
 
         const project = result.recordset[0];
@@ -119,8 +118,8 @@ export const projectResolvers = {
           .input('idProjet', sql.UniqueIdentifier, id)
           .query(`
             SELECT e.idEquipe, e.nom_equipe, e.description_equipe
-            FROM Equipes e
-            INNER JOIN ProjectEquipe pe ON e.idEquipe = pe.idEquipe
+            FROM Equipe e
+            INNER JOIN ProjetEquipe pe ON e.idEquipe = pe.idEquipe
             WHERE pe.idProjet = @idProjet;
           `);
 
@@ -136,25 +135,29 @@ export const projectResolvers = {
 
   Mutation: {
     // Create a new project
-    createProject: async (
+    createProjet: async (
       _: any,
-      { nom_projet, description_projet }: { nom_projet: string; description_projet?: string },
+      { nom_projet, description_projet, statut_projet }: {
+        nom_projet: string;
+        description_projet?: string;
+        statut_projet?: 'TODO' | 'IN_PROGRESS' | 'END';
+      },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
         const idProjet = uuidv4();
         const date_debut_projet = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        const statut_project = 'TODO';
+        const statut = statut_projet || 'TODO';
 
         await pool.request()
           .input('idProjet', sql.UniqueIdentifier, idProjet)
           .input('nom_projet', sql.VarChar, nom_projet)
           .input('description_projet', sql.VarChar, description_projet || '')
           .input('date_debut_projet', sql.DateTime, date_debut_projet)
-          .input('statut_project', sql.VarChar, statut_project)
+          .input('statut_projet', sql.VarChar, statut)
           .query(`
-            INSERT INTO Projects (idProjet, nom_projet, description_projet, date_debut_projet, statut_project)
-            VALUES (@idProjet, @nom_projet, @description_projet, @date_debut_projet, @statut_project);
+            INSERT INTO Projet (idProjet, nom_projet, description_projet, date_debut_projet, statut_projet)
+            VALUES (@idProjet, @nom_projet, @description_projet, @date_debut_projet, @statut_projet);
           `);
 
         return {
@@ -162,7 +165,7 @@ export const projectResolvers = {
           nom_projet,
           description_projet,
           date_debut_projet,
-          statut_project,
+          statut_projet: statut,
         };
       } catch (error) {
         console.error('Error creating project:', error);
@@ -171,59 +174,53 @@ export const projectResolvers = {
     },
 
     // Update an existing project
-    updateProject: async (
+    updateProjet: async (
       _: any,
-      { id, nom_projet, description_projet, statut_project }: {
-        id: string;
-        nom_projet?: string;
-        description_projet?: string;
-        statut_project?: 'TODO' | 'IN_PROGRESS' | 'END';
-      },
+      { id, nom_projet, description_projet, statut_projet }: { id: string, nom_projet: string, description_projet: string, statut_projet: string },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        let query = 'UPDATE Projects SET ';
-        const inputs: { name: string; type: any; value: any }[] = [];
-
-        if (nom_projet) {
-          query += 'nom_projet = @nom_projet, ';
-          inputs.push({ name: 'nom_projet', type: sql.VarChar, value: nom_projet });
-        }
-
-        if (description_projet) {
-          query += 'description_projet = @description_projet, ';
-          inputs.push({ name: 'description_projet', type: sql.VarChar, value: description_projet });
-        }
-
-        if (statut_project) {
-          query += 'statut_project = @statut_project, ';
-          inputs.push({ name: 'statut_project', type: sql.VarChar, value: statut_project });
-
-          if (statut_project === 'END') {
-            const date_fin_projet = new Date().toISOString().slice(0, 19).replace('T', ' ');
-            query += 'date_fin_projet = @date_fin_projet, ';
-            inputs.push({ name: 'date_fin_projet', type: sql.DateTime, value: date_fin_projet });
-          }
-        }
-
-        query = query.slice(0, -2) + ' WHERE idProjet = @id';
-        inputs.push({ name: 'id', type: sql.UniqueIdentifier, value: id });
-
         const request = pool.request();
-        inputs.forEach((input) => request.input(input.name, input.type, input.value));
+        request.input('id', sql.UniqueIdentifier, id);
+        request.input('nom_projet', sql.NVarChar, nom_projet);
+        request.input('description_projet', sql.NVarChar, description_projet);
+        request.input('statut_projet', sql.NVarChar, statut_projet);
+    
+        // If status is 'Completed', set current date
+        let date_fin_projet = null;
+        if (statut_projet === 'Completed') {
+          date_fin_projet = new Date(); // Set current date (ensure this is in Date object format)
+        }
+    
+        // Prepare the dynamic query based on whether 'date_fin_projet' is null or not
+        let setQuery = `
+          SET 
+            nom_projet = @nom_projet,
+            description_projet = @description_projet,
+            statut_projet = @statut_projet
+        `;
         
-        await request.query(query);
-
-        // Return the updated project
-        const updatedProject = await pool.request()
-          .input('id', sql.UniqueIdentifier, id)
-          .query(`
-            SELECT idProjet, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_project
-            FROM Projects
-            WHERE idProjet = @id;
-          `);
-
-        return updatedProject.recordset[0];
+        if (date_fin_projet !== null) {
+          setQuery += `,
+            date_fin_projet = @date_fin_projet
+          `;
+          request.input('date_fin_projet', sql.DateTime, date_fin_projet);
+        }
+    
+        // Update query with dynamic SET clause
+        const result = await request.query(`
+          UPDATE Projet
+          ${setQuery}
+          WHERE IdProjet = @id;
+        `);
+    
+        return {
+          idProjet: id,
+          nom_projet,
+          description_projet,
+          statut_projet,
+          date_fin_projet: date_fin_projet ? date_fin_projet.toISOString() : null
+        };
       } catch (error) {
         console.error('Error updating project:', error);
         throw new Error('Error updating project');
@@ -231,27 +228,40 @@ export const projectResolvers = {
     },
 
     // Delete a project by ID
-    deleteProject: async (_: any, { id }: { id: string }, { pool }: { pool: sql.ConnectionPool }) => {
+    deleteProjet: async (
+      _: any,
+      { id }: { id: string },
+      { pool }: { pool: sql.ConnectionPool }
+    ) => {
       try {
-        const result = await pool.request()
-          .input('id', sql.UniqueIdentifier, id)
-          .query('DELETE FROM Projects WHERE idProjet = @id');
+        const request = pool.request();
+        request.input('id', sql.UniqueIdentifier, id);
 
-        if (result.rowsAffected[0] > 0) {
-          return {
-            success: true,
-            message: 'Project successfully deleted',
-          };
-        } else {
+        // Perform the deletion query
+        const result = await request.query(`
+          DELETE FROM Projet WHERE IdProjet = @id;
+        `);
+
+        // If no rows are affected, the project wasn't found
+        if (result.rowsAffected[0] === 0) {
           return {
             success: false,
-            message: 'No project found with this ID',
+            message: 'Projet not found'
           };
         }
+
+        // Return success response
+        return {
+          success: true,
+          message: 'Projet successfully deleted'
+        };
       } catch (error) {
         console.error('Error deleting project:', error);
-        throw new Error('Error deleting project');
+        return {
+          success: false,
+          message: 'Error deleting projet'
+        };
       }
-    },
+    }
   },
 };

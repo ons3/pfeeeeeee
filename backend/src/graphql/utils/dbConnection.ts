@@ -5,7 +5,7 @@ const config = {
   user: 'SA',
   password: 'YourPassword123!',
   server: 'localhost',
-  database: 'time',
+  database: 'time_tracking',
   options: {
     encrypt: true, // Use encryption if required
     trustServerCertificate: true, // Change to true for local development

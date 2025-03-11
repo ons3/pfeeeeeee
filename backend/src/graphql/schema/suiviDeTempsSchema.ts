@@ -1,33 +1,39 @@
 import { gql } from "apollo-server-express";
 
-export const suiviDeTempsTypeDefs = gql`
-  type SuiviDeTemps {
-    IdSuivi: Int!
-    IdUtilisateur: Int!
-    IdTache: String!  # Using String to represent UUID
-    heure_debut_suivi: Date!
-    heure_fin_suivi: Date
-    duree: Int
-    utilisateur: Utilisateur  # Relationship with Utilisateur
-    tache: Tache  # Relationship with Tache
+export const suiviDeTempTypeDefs = gql`
+  type SuiviDeTemp {
+    idsuivi: String!
+    heure_debut_suivi: String!
+    heure_fin_suivi: String
+    duree_suivi: Int
+    employee: Employee
+    tache: Tache
   }
 
-  type DeleteSuiviDeTempsResponse {
-    success: Boolean!
-    message: String
+  input SuiviDeTempFilterInput {
+    duree_suivi: Int
   }
 
   extend type Query {
-    suivisDeTemps: [SuiviDeTemps!]!
-    suiviDeTemps(id: Int!): SuiviDeTemps
+    suivisDeTemp: [SuiviDeTemp!]!
+    suiviDeTemp(id: String!): SuiviDeTemp
+    searchSuivisDeTemp(filters: SuiviDeTempFilterInput): [SuiviDeTemp!]!
   }
 
   extend type Mutation {
-  deleteSuiviDeTemps(id: Int!): DeleteSuiviDeTempsResponse
-}
-
-type DeleteSuiviDeTempsResponse {
-  success: Boolean!
-  message: String
-}
+    createSuiviDeTemp(
+      heure_debut_suivi: String!
+      heure_fin_suivi: String
+      duree_suivi: Int
+      idEmployee: String!
+      idTache: String!
+    ): SuiviDeTemp
+    updateSuiviDeTemp(
+      id: String!
+      heure_debut_suivi: String
+      heure_fin_suivi: String
+      duree_suivi: Int
+    ): SuiviDeTemp
+    deleteSuiviDeTemp(id: String!): String
+  }
 `;

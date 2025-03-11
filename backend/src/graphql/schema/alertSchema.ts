@@ -2,33 +2,24 @@ import { gql } from "apollo-server-express";
 
 export const alertTypeDefs = gql`
   type Alert {
-    IdAlert: String!  # Using String to represent UUID
-    IdUtilisateur: Int!
+    idAlert: String!
     message_alert: String!
-    date_creer_alert: Date
-    utilisateur: Utilisateur  # Relationship with Utilisateur
+    date_creer_alert: String!
+    employee: Employee
   }
 
-  type DeleteAlertResponse {
-    success: Boolean!
-    message: String
+  input AlertFilterInput {
+    message_alert: String
   }
 
   extend type Query {
     alerts: [Alert!]!
     alert(id: String!): Alert
+    searchAlerts(filters: AlertFilterInput): [Alert!]!
   }
 
   extend type Mutation {
-  createAlert(
-    IdUtilisateur: Int!,
-    message_alert: String!
-  ): Alert
-  updateAlert(
-    id: String!,
-    message_alert: String
-  ): Alert
-  deleteAlert(id: String!): DeleteAlertResponse
-}
-
+    createAlert(message_alert: String!, idEmployee: String!): Alert
+    deleteAlert(id: String!): String
+  }
 `;

@@ -1,13 +1,13 @@
 import { gql } from "apollo-server-express";
-import { projectTypeDefs } from "./projectSchema";
+import { projetTypeDefs } from "./projetSchema";
 import { equipeTypeDefs } from "./equipeSchema";
-import { relationshipTypeDefs } from "./relationshipSchema";
+import { projetEquipeTypeDefs } from "./projetEquipeSchema";
 import { tacheTypeDefs } from "./tacheSchema";
-import { utilisateurTypeDefs } from "./utilisateurSchema";
+import { employeeTypeDefs } from "./employeeSchema";
 import { alertTypeDefs } from "./alertSchema";
-import { suiviDeTempsTypeDefs } from "./suiviDeTempsSchema";
-
-
+import { suiviDeTempTypeDefs } from "./suiviDeTempsSchema";
+import { administrateurTypeDefs } from "./administrateurSchema";
+import { superviseurTypeDefs } from "./superviseurSchema";
 
 
 
@@ -32,11 +32,13 @@ export const typeDefs = gql`
   }
 
   # Include all the imported type definitions
-  ${projectTypeDefs}
+  ${projetTypeDefs}
   ${equipeTypeDefs}
-  ${relationshipTypeDefs}
+  ${projetEquipeTypeDefs}
+  ${employeeTypeDefs}
   ${tacheTypeDefs}
-  ${utilisateurTypeDefs}
   ${alertTypeDefs}
-  ${suiviDeTempsTypeDefs}
+  ${suiviDeTempTypeDefs}
+  ${administrateurTypeDefs}
+  ${superviseurTypeDefs}
 `;

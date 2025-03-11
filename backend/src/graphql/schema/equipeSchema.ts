@@ -5,7 +5,7 @@ export const equipeTypeDefs = gql`
     idEquipe: String!
     nom_equipe: String!
     description_equipe: String
-    projets: [Project]  # Many-to-many relationship with Project
+    projets: [Projet]  # Many-to-many relationship with Projet
   }
 
   type DeleteEquipeResponse {

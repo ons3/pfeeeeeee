@@ -1,61 +1,46 @@
-import { gql } from 'apollo-server-express';
+import { gql } from "apollo-server-express";
 
 export const tacheTypeDefs = gql`
-  enum StatutTache {
-    TODO
-    IN_PROGRESS
-    END
-  }
-
   type Tache {
     idTache: String!
-    title_tache: String!
+    titre_tache: String!
     description_tache: String
-    date_debut_tache: String!  # Changed from Date to String for simplicity
-    date_fin_tache: String    # Changed from Date to String for consistency
-    statut_tache: StatutTache!
-    dureeMax_tache: Int
-    projet: Project!
-  }
-
-  type DeleteTacheResponse {
-    success: Boolean!
-    message: String
+    date_debut_tache: String!
+    date_fin_tache: String
+    statut_tache: String
+    projet: Projet
+    administrateur: Administrateur
   }
 
   input TacheFilterInput {
-    title_tache: String
-    description_tache: String
-    statut_tache: StatutTache
+    titre_tache: String
+    statut_tache: String
   }
 
   extend type Query {
     taches: [Tache!]!
     tache(id: String!): Tache
-    searchTaches(filters: TacheFilterInput): [Tache!]! # New search query
+    searchTaches(filters: TacheFilterInput): [Tache!]!
   }
 
   extend type Mutation {
     createTache(
-      title_tache: String!
+      titre_tache: String!
       description_tache: String
-      date_debut_tache: String!  # Changed from Date to String
-      date_fin_tache: String    # Changed from Date to String
-      statut_tache: StatutTache!
-      dureeMax_tache: Int
+      date_debut_tache: String!
+      date_fin_tache: String
+      statut_tache: String
       idProjet: String!
+      idAdministrateur: String!
     ): Tache
-
     updateTache(
       id: String!
-      title_tache: String
+      titre_tache: String
       description_tache: String
-      date_debut_tache: String  # Changed from Date to String
-      date_fin_tache: String    # Changed from Date to String
-      statut_tache: StatutTache
-      dureeMax_tache: Int
+      date_debut_tache: String
+      date_fin_tache: String
+      statut_tache: String
     ): Tache
-
-    deleteTache(id: String!): DeleteTacheResponse
+    deleteTache(id: String!): String
   }
 `;
