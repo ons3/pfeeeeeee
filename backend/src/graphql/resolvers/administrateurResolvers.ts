@@ -10,16 +10,10 @@ export const administrateurResolvers = {
           SELECT idAdministrateur, nom_administrateur, email_administrateur
           FROM Administrateur
         `);
-        return {
-          message: "Administrateurs fetched successfully",
-          administrateurs: result.recordset,
-        };
+        return result.recordset;
       } catch (error) {
         console.error("Error fetching administrateurs:", error);
-        return {
-          message: "Error fetching administrateurs",
-          administrateurs: [],
-        };
+        throw new Error("Error fetching administrateurs");
       }
     },
 
