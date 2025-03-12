@@ -4,25 +4,31 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const employeeResolvers = {
   Query: {
+    // Fetch all employees
     employees: async (_: any, __: any, { pool }: { pool: sql.ConnectionPool }) => {
       try {
         const result = await pool.request().query(`
           SELECT idEmployee, nom_employee, email_employee, idEquipe
-          FROM Employees
+          FROM Employee
         `);
-        return result.recordset;
+        return {
+          message: "Employees fetched successfully",
+          employees: result.recordset,
+        };
       } catch (error) {
         console.error("Error fetching employees:", error);
         throw new Error("Error fetching employees");
       }
     },
+
+    // Fetch employee by ID
     employee: async (_: any, { id }: { id: string }, { pool }: { pool: sql.ConnectionPool }) => {
       try {
         const result = await pool.request()
           .input('id', sql.UniqueIdentifier, id)
           .query(`
             SELECT idEmployee, nom_employee, email_employee, idEquipe
-            FROM Employees
+            FROM Employee
             WHERE idEmployee = @id;
           `);
 
@@ -30,12 +36,17 @@ export const employeeResolvers = {
           throw new Error("Employee not found");
         }
 
-        return result.recordset[0];
+        return {
+          message: "Employee fetched successfully",
+          employee: result.recordset[0],
+        };
       } catch (error) {
         console.error("Error fetching employee:", error);
         throw new Error("Error fetching employee");
       }
     },
+
+    // Search employees by filters
     searchEmployees: async (
       _: any,
       { filters }: { filters?: { nom_employee?: string; email_employee?: string } },
@@ -44,13 +55,11 @@ export const employeeResolvers = {
       try {
         let query = `
           SELECT idEmployee, nom_employee, email_employee, idEquipe
-          FROM Employees
+          FROM Employee
         `;
-        
         const conditions = [];
         const inputs = [];
 
-        // Add filters dynamically based on provided arguments
         if (filters?.nom_employee) {
           conditions.push("nom_employee LIKE @nom_employee");
           inputs.push({ name: "nom_employee", type: sql.VarChar, value: `%${filters.nom_employee}%` });
@@ -61,7 +70,6 @@ export const employeeResolvers = {
           inputs.push({ name: "email_employee", type: sql.VarChar, value: `%${filters.email_employee}%` });
         }
 
-        // Append WHERE clause if there are conditions
         if (conditions.length > 0) {
           query += " WHERE " + conditions.join(" AND ");
         }
@@ -70,55 +78,85 @@ export const employeeResolvers = {
         inputs.forEach((input) => request.input(input.name, input.type, input.value));
 
         const result = await request.query(query);
-        return result.recordset;
+        return {
+          message: "Employees searched successfully",
+          employees: result.recordset,
+        };
       } catch (error) {
         console.error("Error searching employees:", error);
         throw new Error("Error searching employees");
       }
     }
   },
+
   Mutation: {
+    // Create a new employee
     createEmployee: async (
       _: any,
-      { nom_employee, email_employee, password_employee, idEquipe }: {
-        nom_employee: string;
-        email_employee: string;
-        password_employee: string;
+      { nomEmployee, emailEmployee, passwordEmployee, idEquipe }: {
+        nomEmployee: string;
+        emailEmployee: string;
+        passwordEmployee: string;
         idEquipe?: string;
       },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        // Hash the password before saving to database
+        if (!nomEmployee || !emailEmployee || !passwordEmployee) {
+          throw new Error("Nom, email, and password are required");
+        }
+    
         const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(password_employee, saltRounds);
-
-        const idEmployee = uuidv4();
-
+        const hashedPassword = await bcrypt.hash(passwordEmployee, saltRounds);
+    
+        let idEmployee = uuidv4();
+        console.log("Generated UUID:", idEmployee);  // Debugging
+    
+        // Ensure unique UUID
+        let employeeExists = true;
+        while (employeeExists) {
+          const result = await pool.request()
+            .input('idEmployee', sql.UniqueIdentifier, idEmployee)
+            .query(`SELECT 1 FROM Employee WHERE idEmployee = @idEmployee`);
+          
+          if (result.recordset.length === 0) {
+            employeeExists = false;
+          } else {
+            idEmployee = uuidv4();  // Generate a new UUID if the current one exists
+          }
+        }
+    
+        // Insert employee into the database
         await pool.request()
           .input('idEmployee', sql.UniqueIdentifier, idEmployee)
-          .input('nom_employee', sql.VarChar, nom_employee)
-          .input('email_employee', sql.VarChar, email_employee)
+          .input('nom_employee', sql.VarChar, nomEmployee)
+          .input('email_employee', sql.VarChar, emailEmployee)
           .input('password_employee', sql.VarChar, hashedPassword)
           .input('idEquipe', sql.UniqueIdentifier, idEquipe || null)
           .query(`
-            INSERT INTO Employees (idEmployee, nom_employee, email_employee, password_employee, idEquipe)
+            INSERT INTO Employee (idEmployee, nom_employee, email_employee, password_employee, idEquipe)
             VALUES (@idEmployee, @nom_employee, @email_employee, @password_employee, @idEquipe);
           `);
-
+    
+        console.log("Employee inserted successfully with ID:", idEmployee);  // Debugging
+    
         return {
-          idEmployee,
-          nom_employee,
-          email_employee,
-          idEquipe,
-          password_employee: hashedPassword, // For debugging; you should not return the password in production
+          message: "Employee created successfully",
+          employee: {
+            idEmployee: idEmployee.toString(),  // Ensure it's a string
+            nomEmployee,
+            emailEmployee,
+            idEquipe,
+          },
         };
       } catch (error) {
         console.error("Error creating employee:", error);
         throw new Error("Error creating employee");
       }
-    },
+    }
+    ,
 
+    // Update employee
     updateEmployee: async (
       _: any,
       { id, nom_employee, email_employee, password_employee, idEquipe }: {
@@ -145,7 +183,6 @@ export const employeeResolvers = {
         }
 
         if (password_employee) {
-          // Hash the password before updating
           const saltRounds = 10;
           const hashedPassword = await bcrypt.hash(password_employee, saltRounds);
           updates.push('password_employee = @password_employee');
@@ -158,7 +195,7 @@ export const employeeResolvers = {
         }
 
         const query = `
-          UPDATE Employees
+          UPDATE Employee
           SET ${updates.join(', ')}
           WHERE idEmployee = @id;
         `;
@@ -166,11 +203,13 @@ export const employeeResolvers = {
         await request.query(query);
 
         return {
-          id,
-          nom_employee,
-          email_employee,
-          idEquipe,
-          password_employee: password_employee || 'Password not updated', // Only return the new password if it's updated
+          message: "Employee updated successfully",
+          employee: {
+            id,
+            nom_employee,
+            email_employee,
+            idEquipe,
+          },
         };
       } catch (error) {
         console.error("Error updating employee:", error);
@@ -178,6 +217,7 @@ export const employeeResolvers = {
       }
     },
 
+    // Delete employee
     deleteEmployee: async (
       _: any,
       { id }: { id: string },
@@ -185,7 +225,7 @@ export const employeeResolvers = {
     ) => {
       try {
         await pool.request().input('id', sql.UniqueIdentifier, id).query(`
-          DELETE FROM Employees WHERE idEmployee = @id;
+          DELETE FROM Employee WHERE idEmployee = @id;
         `);
 
         return {

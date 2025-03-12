@@ -2,12 +2,11 @@ import { gql } from "apollo-server-express";
 
 export const employeeTypeDefs = gql`
   type Employee {
-    idEmployee: String!
-    nom_employee: String!
-    email_employee: String!
-    password_employee: String!
-    idEquipe: String
-    equipe: Equipe
+    idEmployee: String!   # GUID as string
+    nomEmployee: String!  # Use camelCase for consistency
+    emailEmployee: String! 
+    idEquipe: String      # Optional field for Equipe id
+    equipe: Equipe        # Optional relation to Equipe
   }
 
   type DeleteEmployeeResponse {
@@ -15,31 +14,42 @@ export const employeeTypeDefs = gql`
     message: String
   }
 
+  type SearchEmployeesResponse {
+    message: String!
+    employees: [Employee!]!
+  }
+  type EmployeesResponse {
+  message: String!
+  employees: [Employee!]!
+}
+
   input EmployeeFilterInput {
-    nom_employee: String
-    email_employee: String
+    nomEmployee: String
+    emailEmployee: String
   }
 
   extend type Query {
-    employees: [Employee!]!
+    employees: EmployeesResponse
     employee(id: String!): Employee
-    searchEmployees(filters: EmployeeFilterInput): [Employee!]!
+    searchEmployees(filters: EmployeeFilterInput): SearchEmployeesResponse!
   }
 
   extend type Mutation {
     createEmployee(
-      nom_employee: String!
-      email_employee: String!
-      password_employee: String!
+      nomEmployee: String!
+      emailEmployee: String!
+      passwordEmployee: String!
       idEquipe: String
     ): Employee
+
     updateEmployee(
       id: String!
-      nom_employee: String
-      email_employee: String
-      password_employee: String
+      nomEmployee: String
+      emailEmployee: String
+      passwordEmployee: String
       idEquipe: String
     ): Employee
+
     deleteEmployee(id: String!): DeleteEmployeeResponse
   }
 `;

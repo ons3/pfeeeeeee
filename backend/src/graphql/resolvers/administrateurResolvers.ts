@@ -8,34 +8,51 @@ export const administrateurResolvers = {
       try {
         const result = await pool.request().query(`
           SELECT idAdministrateur, nom_administrateur, email_administrateur
-          FROM Administrateurs
+          FROM Administrateur
         `);
-        return result.recordset;
+        return {
+          message: "Administrateurs fetched successfully",
+          administrateurs: result.recordset,
+        };
       } catch (error) {
         console.error("Error fetching administrateurs:", error);
-        throw new Error("Error fetching administrateurs");
+        return {
+          message: "Error fetching administrateurs",
+          administrateurs: [],
+        };
       }
     },
+
     administrateur: async (_: any, { id }: { id: string }, { pool }: { pool: sql.ConnectionPool }) => {
       try {
         const result = await pool.request()
           .input('id', sql.UniqueIdentifier, id)
           .query(`
             SELECT idAdministrateur, nom_administrateur, email_administrateur
-            FROM Administrateurs
+            FROM Administrateur
             WHERE idAdministrateur = @id;
           `);
 
         if (result.recordset.length === 0) {
-          throw new Error("Administrateur not found");
+          return {
+            message: "Administrateur not found",
+            administrateur: null,
+          };
         }
 
-        return result.recordset[0];
+        return {
+          message: "Administrateur found",
+          administrateur: result.recordset[0],
+        };
       } catch (error) {
         console.error("Error fetching administrateur:", error);
-        throw new Error("Error fetching administrateur");
+        return {
+          message: "Error fetching administrateur",
+          administrateur: null,
+        };
       }
     },
+
     searchAdministrateurs: async (
       _: any,
       { filters }: { filters?: { nom_administrateur?: string; email_administrateur?: string } },
@@ -44,13 +61,12 @@ export const administrateurResolvers = {
       try {
         let query = `
           SELECT idAdministrateur, nom_administrateur, email_administrateur
-          FROM Administrateurs
+          FROM Administrateur
         `;
         
         const conditions = [];
         const inputs = [];
 
-        // Add filters dynamically based on provided arguments
         if (filters?.nom_administrateur) {
           conditions.push("nom_administrateur LIKE @nom_administrateur");
           inputs.push({ name: "nom_administrateur", type: sql.VarChar, value: `%${filters.nom_administrateur}%` });
@@ -61,7 +77,6 @@ export const administrateurResolvers = {
           inputs.push({ name: "email_administrateur", type: sql.VarChar, value: `%${filters.email_administrateur}%` });
         }
 
-        // Append WHERE clause if there are conditions
         if (conditions.length > 0) {
           query += " WHERE " + conditions.join(" AND ");
         }
@@ -70,13 +85,20 @@ export const administrateurResolvers = {
         inputs.forEach((input) => request.input(input.name, input.type, input.value));
 
         const result = await request.query(query);
-        return result.recordset;
+        return {
+          message: "Administrateurs fetched successfully",
+          administrateurs: result.recordset,
+        };
       } catch (error) {
         console.error("Error searching administrateurs:", error);
-        throw new Error("Error searching administrateurs");
+        return {
+          message: "Error searching administrateurs",
+          administrateurs: [],
+        };
       }
     }
   },
+
   Mutation: {
     createAdministrateur: async (
       _: any,
@@ -88,31 +110,52 @@ export const administrateurResolvers = {
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        // Hash the password before saving to database
+        const existingAdmin = await pool.request()
+          .input('email', sql.VarChar, email_administrateur)
+          .query("SELECT idAdministrateur FROM Administrateur WHERE email_administrateur = @email");
+    
+        if (existingAdmin.recordset.length > 0) {
+          return {
+            message: "Cet email est déjà utilisé. Veuillez en choisir un autre.",
+            administrateur: null,
+          };
+        }
+    
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password_administrateur, saltRounds);
-
+    
         const idAdministrateur = uuidv4();
-
+    
         await pool.request()
           .input('idAdministrateur', sql.UniqueIdentifier, idAdministrateur)
           .input('nom_administrateur', sql.VarChar, nom_administrateur)
           .input('email_administrateur', sql.VarChar, email_administrateur)
           .input('password_administrateur', sql.VarChar, hashedPassword)
           .query(`
-            INSERT INTO Administrateurs (idAdministrateur, nom_administrateur, email_administrateur, password_administrateur)
+            INSERT INTO Administrateur (idAdministrateur, nom_administrateur, email_administrateur, password_administrateur)
             VALUES (@idAdministrateur, @nom_administrateur, @email_administrateur, @password_administrateur);
           `);
-
+    
         return {
-          idAdministrateur,
-          nom_administrateur,
-          email_administrateur,
-          password_administrateur: hashedPassword, // Just to return the hashed password for now
+          message: "Administrateur created successfully",
+          administrateur: {
+            idAdministrateur,
+            nom_administrateur,
+            email_administrateur,
+          },
         };
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error creating administrateur:", error);
-        throw new Error("Error creating administrateur");
+        if (error.number === 2627) {
+          return {
+            message: "Cet email est déjà enregistré. Veuillez en choisir un autre.",
+            administrateur: null,
+          };
+        }
+        return {
+          message: "Erreur lors de la création de l'administrateur.",
+          administrateur: null,
+        };
       }
     },
 
@@ -141,30 +184,59 @@ export const administrateurResolvers = {
         }
 
         if (password_administrateur) {
-          // Hash the password before updating
           const saltRounds = 10;
           const hashedPassword = await bcrypt.hash(password_administrateur, saltRounds);
           updates.push('password_administrateur = @password_administrateur');
           request.input('password_administrateur', sql.VarChar, hashedPassword);
         }
 
-        const query = `
-          UPDATE Administrateurs
+        if (updates.length === 0) {
+          return {
+            message: "Aucune mise à jour fournie.",
+            administrateur: null,
+          };
+        }
+
+        const updateQuery = `
+          UPDATE Administrateur
           SET ${updates.join(', ')}
           WHERE idAdministrateur = @id;
         `;
 
-        await request.query(query);
+        const result = await request.query(updateQuery);
+
+        if (result.rowsAffected[0] === 0) {
+          return {
+            message: "Administrateur non trouvé.",
+            administrateur: null,
+          };
+        }
+
+        const updatedAdmin = await pool.request()
+          .input('id', sql.UniqueIdentifier, id)
+          .query(`
+            SELECT idAdministrateur, nom_administrateur, email_administrateur
+            FROM Administrateur
+            WHERE idAdministrateur = @id;
+          `);
+
+        if (updatedAdmin.recordset.length === 0) {
+          return {
+            message: "Erreur lors de la récupération des données mises à jour.",
+            administrateur: null,
+          };
+        }
 
         return {
-          id,
-          nom_administrateur,
-          email_administrateur,
-          password_administrateur: password_administrateur || 'Password not updated', // Only return the new password if it's updated
+          message: "Administrateur updated successfully",
+          administrateur: updatedAdmin.recordset[0],
         };
       } catch (error) {
         console.error("Error updating administrateur:", error);
-        throw new Error("Error updating administrateur");
+        return {
+          message: "Erreur lors de la mise à jour de l'administrateur.",
+          administrateur: null,
+        };
       }
     },
 
@@ -174,17 +246,27 @@ export const administrateurResolvers = {
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        await pool.request().input('id', sql.UniqueIdentifier, id).query(`
-          DELETE FROM Administrateurs WHERE idAdministrateur = @id;
+        const result = await pool.request().input('id', sql.UniqueIdentifier, id).query(`
+          DELETE FROM Administrateur WHERE idAdministrateur = @id;
         `);
 
+        if (result.rowsAffected[0] === 0) {
+          return {
+            message: "Administrateur not found",
+            success: false,
+          };
+        }
+
         return {
-          success: true,
           message: `Administrateur with ID ${id} deleted successfully`,
+          success: true,
         };
       } catch (error) {
         console.error("Error deleting administrateur:", error);
-        throw new Error("Error deleting administrateur");
+        return {
+          message: "Error deleting administrateur",
+          success: false,
+        };
       }
     }
   }

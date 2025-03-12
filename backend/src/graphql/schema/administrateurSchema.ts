@@ -5,12 +5,21 @@ export const administrateurTypeDefs = gql`
     idAdministrateur: String!
     nom_administrateur: String!
     email_administrateur: String!
-    password_administrateur: String!
+  }
+
+  type AdministrateurResponse {
+    message: String!
+    administrateur: Administrateur
   }
 
   type DeleteAdministrateurResponse {
     success: Boolean!
     message: String
+  }
+
+  type SearchAdministrateursResponse {
+    message: String!
+    administrateurs: [Administrateur!]!
   }
 
   input AdministrateurFilterInput {
@@ -20,8 +29,8 @@ export const administrateurTypeDefs = gql`
 
   extend type Query {
     administrateurs: [Administrateur!]!
-    administrateur(id: String!): Administrateur
-    searchAdministrateurs(filters: AdministrateurFilterInput): [Administrateur!]!
+    administrateur(id: String!): AdministrateurResponse!
+    searchAdministrateurs(filters: AdministrateurFilterInput): SearchAdministrateursResponse!
   }
 
   extend type Mutation {
@@ -29,13 +38,13 @@ export const administrateurTypeDefs = gql`
       nom_administrateur: String!
       email_administrateur: String!
       password_administrateur: String!
-    ): Administrateur
+    ): AdministrateurResponse!
     updateAdministrateur(
       id: String!
       nom_administrateur: String
       email_administrateur: String
       password_administrateur: String
-    ): Administrateur
-    deleteAdministrateur(id: String!): DeleteAdministrateurResponse
+    ): AdministrateurResponse!
+    deleteAdministrateur(id: String!): DeleteAdministrateurResponse!
   }
 `;
