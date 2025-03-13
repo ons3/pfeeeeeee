@@ -18,10 +18,11 @@ export const employeeTypeDefs = gql`
     message: String!
     employees: [Employee!]!
   }
+
   type EmployeesResponse {
-  message: String!
-  employees: [Employee!]!
-}
+    message: String!
+    employees: [Employee!]!
+  }
 
   input EmployeeFilterInput {
     nomEmployee: String
