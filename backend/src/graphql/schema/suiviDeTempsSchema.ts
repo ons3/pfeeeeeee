@@ -2,7 +2,7 @@ import { gql } from "apollo-server-express";
 
 export const suiviDeTempTypeDefs = gql`
   type SuiviDeTemp {
-    idsuivi: String!
+    idsuivi: ID!
     heure_debut_suivi: String!
     heure_fin_suivi: String
     duree_suivi: Int
@@ -12,11 +12,13 @@ export const suiviDeTempTypeDefs = gql`
 
   input SuiviDeTempFilterInput {
     duree_suivi: Int
+    employeeId: String
+    taskId: String
   }
 
   extend type Query {
     suivisDeTemp: [SuiviDeTemp!]!
-    suiviDeTemp(id: String!): SuiviDeTemp
+    suiviDeTemp(id: ID!): SuiviDeTemp
     searchSuivisDeTemp(filters: SuiviDeTempFilterInput): [SuiviDeTemp!]!
   }
 
@@ -24,16 +26,15 @@ export const suiviDeTempTypeDefs = gql`
     createSuiviDeTemp(
       heure_debut_suivi: String!
       heure_fin_suivi: String
-      duree_suivi: Int
       idEmployee: String!
       idTache: String!
     ): SuiviDeTemp
     updateSuiviDeTemp(
-      id: String!
+      id: ID!
       heure_debut_suivi: String
       heure_fin_suivi: String
       duree_suivi: Int
     ): SuiviDeTemp
-    deleteSuiviDeTemp(id: String!): String
+    deleteSuiviDeTemp(id: ID!): String
   }
 `;
