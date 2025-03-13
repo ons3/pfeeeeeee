@@ -1,8 +1,14 @@
 import express, { Application } from 'express';
 import { ApolloServer } from 'apollo-server-express';
+import { authMiddleware, createApolloContext } from './middleware/auth';
+import dotenv from 'dotenv';
+
 import { typeDefs } from './graphql/schema'; // Import all type definitions
 import { resolvers } from './graphql/resolvers'; // Import all resolvers
 import { connectToDatabase, getPool } from './graphql/utils/dbConnection'; // Import database connection functions
+
+// Charger les variables d'environnement
+dotenv.config();
 
 const app: Application = express();
 const port = process.env.PORT || 5000;
@@ -10,11 +16,20 @@ const port = process.env.PORT || 5000;
 // Connect to SQL Server
 connectToDatabase(); // Establish the database connection
 
+// Apply authentication middleware
+app.use(authMiddleware);
+
 // Apollo Server setup
 const server = new ApolloServer({
   typeDefs, // Provide the type definitions (schemas)
   resolvers, // Provide the resolvers
-  context: () => ({ pool: getPool() }), // Pass the database pool to resolvers for DB access
+  context: ({ req }) => {
+    // Combine authentication context with database pool
+    return {
+      ...createApolloContext({ req }),
+      pool: getPool() // Pass the database pool to resolvers for DB access
+    };
+  }
 });
 
 // Start the Apollo Server
