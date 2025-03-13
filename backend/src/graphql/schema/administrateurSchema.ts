@@ -1,4 +1,4 @@
-import { gql } from "apollo-server-express";
+import { gql } from 'apollo-server-express';
 
 export const administrateurTypeDefs = gql`
   type Administrateur {
@@ -8,24 +8,24 @@ export const administrateurTypeDefs = gql`
     googleId: String
     isActive: Boolean
   }
-  
+
   type AdministrateurResponse {
     message: String!
     administrateur: Administrateur
     token: String
   }
-  
+
   type LoginResponse {
     success: Boolean!
     message: String!
     administrateur: Administrateur
     token: String
   }
-  
+
   extend type Query {
     administrateur: AdministrateurResponse!
   }
-  
+
   extend type Mutation {
     updateAdministrateur(
       nom_administrateur: String
