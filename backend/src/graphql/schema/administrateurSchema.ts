@@ -5,46 +5,41 @@ export const administrateurTypeDefs = gql`
     idAdministrateur: String!
     nom_administrateur: String!
     email_administrateur: String!
+    googleId: String
+    isActive: Boolean
   }
-
+  
   type AdministrateurResponse {
     message: String!
     administrateur: Administrateur
+    token: String
   }
-
-  type DeleteAdministrateurResponse {
+  
+  type LoginResponse {
     success: Boolean!
-    message: String
-  }
-
-  type SearchAdministrateursResponse {
     message: String!
-    administrateurs: [Administrateur!]!
+    administrateur: Administrateur
+    token: String
   }
-
-  input AdministrateurFilterInput {
-    nom_administrateur: String
-    email_administrateur: String
-  }
-
+  
   extend type Query {
-    administrateurs: [Administrateur!]!
-    administrateur(id: String!): AdministrateurResponse!
-    searchAdministrateurs(filters: AdministrateurFilterInput): SearchAdministrateursResponse!
+    administrateur: AdministrateurResponse!
   }
-
+  
   extend type Mutation {
-    createAdministrateur(
-      nom_administrateur: String!
-      email_administrateur: String!
-      password_administrateur: String!
-    ): AdministrateurResponse!
     updateAdministrateur(
-      id: String!
       nom_administrateur: String
       email_administrateur: String
       password_administrateur: String
     ): AdministrateurResponse!
-    deleteAdministrateur(id: String!): DeleteAdministrateurResponse!
+    
+    loginAdministrateur(
+      email_administrateur: String!
+      password_administrateur: String!
+    ): LoginResponse!
+    
+    loginWithGoogle(
+      googleIdToken: String!
+    ): LoginResponse!
   }
 `;

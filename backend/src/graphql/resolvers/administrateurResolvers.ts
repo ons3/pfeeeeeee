@@ -1,176 +1,83 @@
 import sql from 'mssql';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import { OAuth2Client } from 'google-auth-library';
+
+// Configuration du client Google OAuth
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Génération de token JWT
+const generateToken = (admin: { idAdministrateur: any; nom_administrateur?: string; email_administrateur: any; googleId?: string; isActive?: boolean; }) => {
+  return jwt.sign(
+    { id: admin.idAdministrateur, email: admin.email_administrateur },
+    process.env.JWT_SECRET || 'default_secret_change_this_in_production',
+    { expiresIn: '24h' }
+  );
+};
 
 export const administrateurResolvers = {
   Query: {
-    administrateurs: async (_: any, __: any, { pool }: { pool: sql.ConnectionPool }) => {
-      try {
-        const result = await pool.request().query(`
-          SELECT idAdministrateur, nom_administrateur, email_administrateur
-          FROM Administrateur
-        `);
+    // Obtenir les détails de l'administrateur connecté
+    administrateur: async (_: any, __: any, { pool, user }: { pool: sql.ConnectionPool, user: any }) => {
+      // Vérifier si l'utilisateur est authentifié
+      if (!user) {
         return {
-          message: "Administrateurs fetched successfully",
-          administrateurs: result.recordset,
-        };
-      } catch (error) {
-        console.error("Error fetching administrateurs:", error);
-        return {
-          message: "Error fetching administrateurs",
-          administrateurs: [],
+          message: "Non autorisé",
+          administrateur: null
         };
       }
-    },
-
-    administrateur: async (_: any, { id }: { id: string }, { pool }: { pool: sql.ConnectionPool }) => {
+      
       try {
         const result = await pool.request()
-          .input('id', sql.UniqueIdentifier, id)
+          .input('id', sql.UniqueIdentifier, user.id)
           .query(`
-            SELECT idAdministrateur, nom_administrateur, email_administrateur
+            SELECT idAdministrateur, nom_administrateur, email_administrateur, googleId, isActive
             FROM Administrateur
             WHERE idAdministrateur = @id;
           `);
 
         if (result.recordset.length === 0) {
           return {
-            message: "Administrateur not found",
+            message: "Administrateur non trouvé",
             administrateur: null,
           };
         }
 
         return {
-          message: "Administrateur found",
+          message: "Administrateur trouvé",
           administrateur: result.recordset[0],
         };
       } catch (error) {
-        console.error("Error fetching administrateur:", error);
+        console.error("Erreur lors de la récupération de l'administrateur:", error);
         return {
-          message: "Error fetching administrateur",
+          message: "Erreur lors de la récupération de l'administrateur",
           administrateur: null,
-        };
-      }
-    },
-
-    searchAdministrateurs: async (
-      _: any,
-      { filters }: { filters?: { nom_administrateur?: string; email_administrateur?: string } },
-      { pool }: { pool: sql.ConnectionPool }
-    ) => {
-      try {
-        let query = `
-          SELECT idAdministrateur, nom_administrateur, email_administrateur
-          FROM Administrateur
-        `;
-        
-        const conditions = [];
-        const inputs = [];
-
-        if (filters?.nom_administrateur) {
-          conditions.push("nom_administrateur LIKE @nom_administrateur");
-          inputs.push({ name: "nom_administrateur", type: sql.VarChar, value: `%${filters.nom_administrateur}%` });
-        }
-
-        if (filters?.email_administrateur) {
-          conditions.push("email_administrateur LIKE @email_administrateur");
-          inputs.push({ name: "email_administrateur", type: sql.VarChar, value: `%${filters.email_administrateur}%` });
-        }
-
-        if (conditions.length > 0) {
-          query += " WHERE " + conditions.join(" AND ");
-        }
-
-        const request = pool.request();
-        inputs.forEach((input) => request.input(input.name, input.type, input.value));
-
-        const result = await request.query(query);
-        return {
-          message: "Administrateurs fetched successfully",
-          administrateurs: result.recordset,
-        };
-      } catch (error) {
-        console.error("Error searching administrateurs:", error);
-        return {
-          message: "Error searching administrateurs",
-          administrateurs: [],
         };
       }
     }
   },
 
   Mutation: {
-    createAdministrateur: async (
-      _: any,
-      { nom_administrateur, email_administrateur, password_administrateur }: {
-        nom_administrateur: string;
-        email_administrateur: string;
-        password_administrateur: string;
-      },
-      { pool }: { pool: sql.ConnectionPool }
-    ) => {
-      try {
-        const existingAdmin = await pool.request()
-          .input('email', sql.VarChar, email_administrateur)
-          .query("SELECT idAdministrateur FROM Administrateur WHERE email_administrateur = @email");
-    
-        if (existingAdmin.recordset.length > 0) {
-          return {
-            message: "Cet email est déjà utilisé. Veuillez en choisir un autre.",
-            administrateur: null,
-          };
-        }
-    
-        const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(password_administrateur, saltRounds);
-    
-        const idAdministrateur = uuidv4();
-    
-        await pool.request()
-          .input('idAdministrateur', sql.UniqueIdentifier, idAdministrateur)
-          .input('nom_administrateur', sql.VarChar, nom_administrateur)
-          .input('email_administrateur', sql.VarChar, email_administrateur)
-          .input('password_administrateur', sql.VarChar, hashedPassword)
-          .query(`
-            INSERT INTO Administrateur (idAdministrateur, nom_administrateur, email_administrateur, password_administrateur)
-            VALUES (@idAdministrateur, @nom_administrateur, @email_administrateur, @password_administrateur);
-          `);
-    
-        return {
-          message: "Administrateur created successfully",
-          administrateur: {
-            idAdministrateur,
-            nom_administrateur,
-            email_administrateur,
-          },
-        };
-      } catch (error: any) {
-        console.error("Error creating administrateur:", error);
-        if (error.number === 2627) {
-          return {
-            message: "Cet email est déjà enregistré. Veuillez en choisir un autre.",
-            administrateur: null,
-          };
-        }
-        return {
-          message: "Erreur lors de la création de l'administrateur.",
-          administrateur: null,
-        };
-      }
-    },
-
+    // Mise à jour du profil administrateur
     updateAdministrateur: async (
       _: any,
-      { id, nom_administrateur, email_administrateur, password_administrateur }: {
-        id: string;
+      { nom_administrateur, email_administrateur, password_administrateur }: {
         nom_administrateur?: string;
         email_administrateur?: string;
         password_administrateur?: string;
       },
-      { pool }: { pool: sql.ConnectionPool }
+      { pool, user }: { pool: sql.ConnectionPool, user: any }
     ) => {
+      if (!user) {
+        return {
+          message: "Non autorisé",
+          administrateur: null
+        };
+      }
+      
       try {
-        const request = pool.request().input('id', sql.UniqueIdentifier, id);
+        const request = pool.request().input('id', sql.UniqueIdentifier, user.id);
         const updates: string[] = [];
 
         if (nom_administrateur) {
@@ -203,36 +110,23 @@ export const administrateurResolvers = {
           WHERE idAdministrateur = @id;
         `;
 
-        const result = await request.query(updateQuery);
-
-        if (result.rowsAffected[0] === 0) {
-          return {
-            message: "Administrateur non trouvé.",
-            administrateur: null,
-          };
-        }
+        await request.query(updateQuery);
 
         const updatedAdmin = await pool.request()
-          .input('id', sql.UniqueIdentifier, id)
+          .input('id', sql.UniqueIdentifier, user.id)
           .query(`
-            SELECT idAdministrateur, nom_administrateur, email_administrateur
+            SELECT idAdministrateur, nom_administrateur, email_administrateur, googleId, isActive
             FROM Administrateur
             WHERE idAdministrateur = @id;
           `);
 
-        if (updatedAdmin.recordset.length === 0) {
-          return {
-            message: "Erreur lors de la récupération des données mises à jour.",
-            administrateur: null,
-          };
-        }
-
         return {
-          message: "Administrateur updated successfully",
+          message: "Profil administrateur mis à jour avec succès",
           administrateur: updatedAdmin.recordset[0],
+          token: generateToken(updatedAdmin.recordset[0])
         };
       } catch (error) {
-        console.error("Error updating administrateur:", error);
+        console.error("Erreur lors de la mise à jour de l'administrateur:", error);
         return {
           message: "Erreur lors de la mise à jour de l'administrateur.",
           administrateur: null,
@@ -240,32 +134,187 @@ export const administrateurResolvers = {
       }
     },
 
-    deleteAdministrateur: async (
+    // Connexion avec email/mot de passe
+    loginAdministrateur: async (
       _: any,
-      { id }: { id: string },
+      { email_administrateur, password_administrateur }: {
+        email_administrateur: string;
+        password_administrateur: string;
+      },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        const result = await pool.request().input('id', sql.UniqueIdentifier, id).query(`
-          DELETE FROM Administrateur WHERE idAdministrateur = @id;
-        `);
+        // Vérifier s'il y a un administrateur avec cet email
+        const result = await pool.request()
+          .input('email', sql.VarChar, email_administrateur)
+          .query(`
+            SELECT idAdministrateur, nom_administrateur, email_administrateur, password_administrateur, googleId, isActive
+            FROM Administrateur
+            WHERE email_administrateur = @email;
+          `);
 
-        if (result.rowsAffected[0] === 0) {
+        if (result.recordset.length === 0) {
           return {
-            message: "Administrateur not found",
             success: false,
+            message: "Email ou mot de passe incorrect",
+            administrateur: null,
+            token: null
+          };
+        }
+
+        const admin = result.recordset[0];
+        
+        // Vérifier le mot de passe
+        if (!admin.password_administrateur) {
+          return {
+            success: false,
+            message: "Ce compte utilise l'authentification Google. Veuillez vous connecter avec Google.",
+            administrateur: null,
+            token: null
+          };
+        }
+        
+        const passwordMatch = await bcrypt.compare(password_administrateur, admin.password_administrateur);
+
+        if (!passwordMatch) {
+          return {
+            success: false,
+            message: "Email ou mot de passe incorrect",
+            administrateur: null,
+            token: null
           };
         }
 
         return {
-          message: `Administrateur with ID ${id} deleted successfully`,
           success: true,
+          message: "Connexion réussie",
+          administrateur: {
+            idAdministrateur: admin.idAdministrateur,
+            nom_administrateur: admin.nom_administrateur,
+            email_administrateur: admin.email_administrateur,
+            googleId: admin.googleId,
+            isActive: admin.isActive
+          },
+          token: generateToken(admin)
         };
       } catch (error) {
-        console.error("Error deleting administrateur:", error);
+        console.error("Erreur lors de la connexion:", error);
         return {
-          message: "Error deleting administrateur",
           success: false,
+          message: "Erreur lors de la connexion",
+          administrateur: null,
+          token: null
+        };
+      }
+    },
+
+    // Connexion avec Google
+    loginWithGoogle: async (
+      _: any,
+      { googleIdToken }: { googleIdToken: string },
+      { pool }: { pool: sql.ConnectionPool }
+    ) => {
+      try {
+        // Vérifier le token Google
+        const ticket = await client.verifyIdToken({
+          idToken: googleIdToken,
+          audience: process.env.GOOGLE_CLIENT_ID
+        });
+        
+        const payload = ticket.getPayload();
+        const googleId = payload?.sub;
+        const email = payload?.email;
+        const name = payload?.name;
+        
+        if (!googleId || !email) {
+          return {
+            success: false,
+            message: "Token Google invalide",
+            administrateur: null,
+            token: null
+          };
+        }
+        
+        // Vérifier si un compte admin existe déjà
+        const countResult = await pool.request().query('SELECT COUNT(*) as count FROM Administrateur');
+        const adminCount = countResult.recordset[0].count;
+        
+        // Chercher un administrateur avec cet email ou GoogleID
+        const existingAdminResult = await pool.request()
+          .input('email', sql.VarChar, email)
+          .input('googleId', sql.VarChar, googleId)
+          .query(`
+            SELECT idAdministrateur, nom_administrateur, email_administrateur, googleId, isActive
+            FROM Administrateur
+            WHERE email_administrateur = @email OR googleId = @googleId;
+          `);
+        
+        // Si aucun admin n'existe et c'est la première connexion, créer un compte
+        if (adminCount === 0 && existingAdminResult.recordset.length === 0) {
+          const idAdministrateur = uuidv4();
+          await pool.request()
+            .input('idAdministrateur', sql.UniqueIdentifier, idAdministrateur)
+            .input('nom_administrateur', sql.VarChar, name || 'Admin')
+            .input('email_administrateur', sql.VarChar, email)
+            .input('googleId', sql.VarChar, googleId)
+            .input('isActive', sql.Bit, 1)
+            .query(`
+              INSERT INTO Administrateur (idAdministrateur, nom_administrateur, email_administrateur, googleId, isActive)
+              VALUES (@idAdministrateur, @nom_administrateur, @email_administrateur, @googleId, @isActive);
+            `);
+          
+          const newAdmin = {
+            idAdministrateur,
+            nom_administrateur: name || 'Admin',
+            email_administrateur: email,
+            googleId,
+            isActive: true
+          };
+          
+          return {
+            success: true,
+            message: "Compte administrateur créé et connecté avec Google",
+            administrateur: newAdmin,
+            token: generateToken(newAdmin)
+          };
+        } 
+        // Si un admin existe déjà avec cet email ou googleId
+        else if (existingAdminResult.recordset.length > 0) {
+          const admin = existingAdminResult.recordset[0];
+          
+          // Mettre à jour googleId si nécessaire
+          if (!admin.googleId) {
+            await pool.request()
+              .input('id', sql.UniqueIdentifier, admin.idAdministrateur)
+              .input('googleId', sql.VarChar, googleId)
+              .query('UPDATE Administrateur SET googleId = @googleId WHERE idAdministrateur = @id');
+            
+            admin.googleId = googleId;
+          }
+          
+          return {
+            success: true,
+            message: "Connexion Google réussie",
+            administrateur: admin,
+            token: generateToken(admin)
+          };
+        }
+        // Si on a déjà un admin mais pas avec cet email
+        else {
+          return {
+            success: false,
+            message: "Un compte administrateur existe déjà. Vous n'êtes pas autorisé à vous connecter.",
+            administrateur: null,
+            token: null
+          };
+        }
+      } catch (error) {
+        console.error("Erreur lors de la connexion avec Google:", error);
+        return {
+          success: false,
+          message: "Erreur lors de la connexion avec Google",
+          administrateur: null,
+          token: null
         };
       }
     }
