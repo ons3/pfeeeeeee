@@ -2,12 +2,13 @@ import { gql } from 'apollo-server-express';
 
 export const administrateurTypeDefs = gql`
   type Administrateur {
-    idAdministrateur: String!
-    nom_administrateur: String!
-    email_administrateur: String!
-    googleId: String
-    isActive: Boolean
-  }
+  idAdministrateur: String!
+  nom_administrateur: String!
+  email_administrateur: String!
+  googleId: String
+  isActive: Boolean
+}
+
 
   type AdministrateurResponse {
     message: String!
