@@ -12,7 +12,7 @@ const { toggleMenu, toggleDarkMode, isDarkTheme } = useLayout();
                 <i class="pi pi-bars"></i>
             </button>
             <router-link to="/" class="layout-topbar-logo">
-                <img src="/logo2.jpeg" alt="Logo" />
+                <img src="/logo2.png" alt="Logo" />
             </router-link>
         </div>
 
@@ -30,7 +30,7 @@ const { toggleMenu, toggleDarkMode, isDarkTheme } = useLayout();
                 <i class="pi pi-ellipsis-v"></i>
             </button>
 
-            <div class="layout-topbar-menu hidden lg:block">
+            <div class="hidden layout-topbar-menu lg:block">
                 <div class="layout-topbar-menu-content">
                     <router-link to="/calendar" class="layout-topbar-action">
                         <i class="pi pi-calendar"></i>
