@@ -1,49 +1,30 @@
-import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
 
-// Étendre l'interface Request d'Express
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        email: string;
-      };
+export const authMiddleware = async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+  // Récupérer le token depuis l'en-tête Authorization
+  const token = req.headers.authorization || '';
+
+  if (token) {
+    try {
+      // Vérifier le token JWT
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret_change_this_in_production');
+      req.user = decoded; // Attacher l'utilisateur décodé à la requête
+    } catch (error) {
+      console.log('Token non valide');
     }
   }
+  next(); // Continuer avec la requête
+};
+
+// Interface pour le contexte Apollo
+interface ApolloContextParams {
+  req: Request & { user?: any };
 }
 
-// Middleware pour extraire et vérifier le JWT
-export const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
-  
-    if (!token) {
-      return next();
-    }
-  
-    try {
-      const decoded = jwt.verify(
-        token, 
-        process.env.JWT_SECRET || 'default_secret_change_this_in_production'
-      ) as { id: string; email: string };
-  
-      // Only allow the admin with the email "onssbenamara3@gmail.com"
-      if (decoded.email !== 'onssbenamara3@gmail.com') {
-        return res.status(403).send('Accès interdit');
-      }
-  
-      req.user = { id: decoded.id, email: decoded.email };
-      next();
-    } catch (error) {
-      console.error('Erreur d\'authentification:', error);
-      next();
-    }
-  };
-  
-// Utilisation dans Apollo Server
-export const createApolloContext = ({ req }: { req: Request }) => {
+// Fonction pour créer le contexte Apollo
+export const createApolloContext = ({ req }: ApolloContextParams) => {
   return {
-    user: req.user || null,
+    user: req.user // L'utilisateur est disponible dans le contexte
   };
 };

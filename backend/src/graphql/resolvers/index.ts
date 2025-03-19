@@ -2,7 +2,7 @@ import { projetResolvers } from "./projetResolvers";
 import { equipeResolvers } from "./equipeResolvers";
 import { projetEquipeSchema } from "./projetEquipeSchema";
 import { tacheResolvers } from "./tacheResolvers";
-import { administrateurResolvers } from "./administrateurResolvers";
+import { adminResolvers } from "./administrateurResolvers";
 import { alertResolvers } from "./alertResolvers";
 import { suiviDeTempsResolvers } from "./suiviDeTempsResolvers";
 import { employeeResolvers } from "./employeeResolvers";
@@ -16,7 +16,7 @@ export const resolvers = {
     ...projetResolvers.Query,
     ...equipeResolvers.Query,
     ...tacheResolvers.Query,
-    ...administrateurResolvers.Query,
+    ...adminResolvers.Query,
     ...alertResolvers.Query,
     ...suiviDeTempsResolvers.Query,
     ...employeeResolvers.Query,
@@ -27,7 +27,7 @@ export const resolvers = {
     ...equipeResolvers.Mutation,
     ...projetEquipeSchema.Mutation,
     ...tacheResolvers.Mutation,
-    ...administrateurResolvers.Mutation,
+    ...adminResolvers.Mutation,
     ...alertResolvers.Mutation,
     ...suiviDeTempsResolvers.Mutation,
     ...employeeResolvers.Mutation
