@@ -1,198 +1,246 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { FilterMatchMode } from '@primevue/core/api';
+import { useToast } from 'primevue/usetoast';
 
-const items = ref([
-    {
-        label: 'Update',
-        icon: 'pi pi-refresh'
-    },
-    {
-        label: 'Delete',
-        icon: 'pi pi-times'
-    },
-    {
-        separator: true
-    },
-    {
-        label: 'Home',
-        icon: 'pi pi-home'
-    }
+const toast = useToast();
+const dt = ref();
+const employees = ref([]);
+const employeeDialog = ref(false);
+const deleteEmployeeDialog = ref(false);
+const deleteEmployeesDialog = ref(false);
+const employee = ref({});
+const selectedEmployees = ref([]);
+const filters = ref({
+    global: { value: null, matchMode: FilterMatchMode.CONTAINS }
+});
+const submitted = ref(false);
+const statuses = ref([
+    { label: 'ACTIVE', value: 'active' },
+    { label: 'INACTIVE', value: 'inactive' }
 ]);
 
-const loading = ref([false, false, false]);
+// Helper Functions
+const formatCurrency = (value) => {
+    return value ? value.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : '';
+};
 
-function load(index) {
-    loading.value[index] = true;
-    setTimeout(() => (loading.value[index] = false), 1000);
-}
+const openNew = () => {
+    employee.value = {};
+    submitted.value = false;
+    employeeDialog.value = true;
+};
+
+const hideDialog = () => {
+    employeeDialog.value = false;
+    submitted.value = false;
+};
+
+const saveEmployee = () => {
+    submitted.value = true;
+
+    if (employee.value.name?.trim()) {
+        if (employee.value.id) {
+            const index = findIndexById(employee.value.id);
+            employees.value[index] = { ...employee.value };
+            toast.add({ severity: 'success', summary: 'Successful', detail: 'Employee Updated', life: 3000 });
+        } else {
+            employee.value.id = createId();
+            employee.value.name = employee.value.name.trim();
+            employee.value.description = employee.value.description || '';
+            employees.value.push({ ...employee.value });
+            toast.add({ severity: 'success', summary: 'Successful', detail: 'Employee Created', life: 3000 });
+        }
+
+        employeeDialog.value = false;
+        employee.value = {};
+    }
+};
+
+const editEmployee = (emp) => {
+    employee.value = { ...emp };
+    employeeDialog.value = true;
+};
+
+const confirmDeleteEmployee = (emp) => {
+    employee.value = emp;
+    deleteEmployeeDialog.value = true;
+};
+
+const deleteEmployee = () => {
+    employees.value = employees.value.filter((val) => val.id !== employee.value.id);
+    deleteEmployeeDialog.value = false;
+    employee.value = {};
+    toast.add({ severity: 'success', summary: 'Successful', detail: 'Employee Deleted', life: 3000 });
+};
+
+const findIndexById = (id) => {
+    return employees.value.findIndex((emp) => emp.id === id);
+};
+
+const createId = () => {
+    return Math.random().toString(36).substring(2, 9);
+};
+
+const exportCSV = () => {
+    dt.value.exportCSV();
+};
+
+const confirmDeleteSelected = () => {
+    deleteEmployeesDialog.value = true;
+};
+
+const deleteSelectedEmployees = () => {
+    employees.value = employees.value.filter((val) => !selectedEmployees.value.includes(val));
+    deleteEmployeesDialog.value = false;
+    selectedEmployees.value = [];
+    toast.add({ severity: 'success', summary: 'Successful', detail: 'Employees Deleted', life: 3000 });
+};
+
+const getStatusLabel = (status) => {
+    return status === 'ACTIVE' ? 'success' : 'warn';
+};
+
+// Add 20 sample employees on component mount
+onMounted(() => {
+    for (let i = 1; i <= 20; i++) {
+        employees.value.push({
+            id: createId(),
+            name: `Employee ${i}`,
+            description: `Description for Employee ${i}`,
+            status: i % 2 === 0 ? 'ACTIVE' : 'INACTIVE'
+        });
+    }
+});
 </script>
 
 <template>
-    <div class="flex flex-col md:flex-row gap-8">
-        <div class="md:w-1/2">
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Default</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button label="Submit"></Button>
-                    <Button label="Disabled" :disabled="true"></Button>
-                    <Button label="Link" class="p-button-link" />
-                </div>
-            </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Severities</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button label="Primary" />
-                    <Button label="Secondary" severity="secondary" />
-                    <Button label="Success" severity="success" />
-                    <Button label="Info" severity="info" />
-                    <Button label="Warn" severity="warn" />
-                    <Button label="Help" severity="help" />
-                    <Button label="Danger" severity="danger" />
-                    <Button label="Contrast" severity="contrast" />
-                </div>
-            </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Text</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button label="Primary" text />
-                    <Button label="Secondary" severity="secondary" text />
-                    <Button label="Success" severity="success" text />
-                    <Button label="Info" severity="info" text />
-                    <Button label="Warn" severity="warn" text />
-                    <Button label="Help" severity="help" text />
-                    <Button label="Danger" severity="danger" text />
-                    <Button label="Plain" plain text />
-                </div>
-            </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Outlined</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button label="Primary" outlined />
-                    <Button label="Secondary" severity="secondary" outlined />
-                    <Button label="Success" severity="success" outlined />
-                    <Button label="Info" severity="info" outlined />
-                    <Button label="warn" severity="warn" outlined />
-                    <Button label="Help" severity="help" outlined />
-                    <Button label="Danger" severity="danger" outlined />
-                    <Button label="Contrast" severity="contrast" outlined />
-                </div>
-            </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Group</div>
-                <div class="flex flex-wrap gap-2">
-                    <ButtonGroup>
-                        <Button label="Save" icon="pi pi-check" />
-                        <Button label="Delete" icon="pi pi-trash" />
-                        <Button label="Cancel" icon="pi pi-times" />
-                    </ButtonGroup>
-                </div>
-            </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">SplitButton</div>
-                <div class="flex flex-wrap gap-2">
-                    <SplitButton label="Save" :model="items"></SplitButton>
-                    <SplitButton label="Save" :model="items" severity="secondary"></SplitButton>
-                    <SplitButton label="Save" :model="items" severity="success"></SplitButton>
-                    <SplitButton label="Save" :model="items" severity="info"></SplitButton>
-                    <SplitButton label="Save" :model="items" severity="warn"></SplitButton>
-                    <SplitButton label="Save" :model="items" severity="help"></SplitButton>
-                    <SplitButton label="Save" :model="items" severity="danger"></SplitButton>
-                    <SplitButton label="Save" :model="items" severity="contrast"></SplitButton>
-                </div>
-            </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Templating</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button type="button">
-                        <img alt="logo" src="/demo/images/logo-white.svg" style="width: 1.5rem" />
-                    </Button>
-                    <Button type="button" outlined severity="success">
-                        <img alt="logo" src="/demo/images/logo.svg" style="width: 1.5rem" />
-                        <span class="ml-2 text-bold">PrimeVue</span>
-                    </Button>
-                </div>
-            </div>
+    <div class="employee-page p-4">
+        <div class="card">
+            <!-- Toolbar -->
+            <Toolbar class="mb-4">
+                <template #start>
+                    <Button label="New" icon="pi pi-plus" class="mr-2" @click="openNew" />
+                    <Button label="Delete" icon="pi pi-trash" severity="danger" @click="confirmDeleteSelected" :disabled="!selectedEmployees || !selectedEmployees.length" />
+                </template>
+                <template #end>
+                    <Button label="Export" icon="pi pi-upload" @click="exportCSV" />
+                </template>
+            </Toolbar>
+
+            <!-- DataTable -->
+            <DataTable
+                ref="dt"
+                v-model:selection="selectedEmployees"
+                :value="employees"
+                dataKey="id"
+                :paginator="true"
+                :rows="10"
+                :filters="filters"
+                paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+                :rowsPerPageOptions="[5, 10, 25]"
+                currentPageReportTemplate="Showing {first} to {last} of {totalRecords} employees"
+            >
+                <template #header>
+                    <div class="flex flex-wrap gap-2 align-items-center justify-content-between">
+                        <h4 class="m-0">Manage Employees</h4>
+                        <IconField iconPosition="left">
+                            <InputIcon>
+                                <i class="pi pi-search" />
+                            </InputIcon>
+                            <InputText v-model="filters['global'].value" placeholder="Search..." />
+                        </IconField>
+                    </div>
+                </template>
+
+                <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
+                <Column field="id" header="ID" sortable></Column>
+                <Column field="name" header="Name" sortable></Column>
+                <Column field="description" header="Description" sortable></Column>
+                <Column field="status" header="Status" sortable>
+                    <template #body="{ data }">
+                        <Tag :value="data.status" :severity="getStatusLabel(data.status)" />
+                    </template>
+                </Column>
+                <Column header="Actions" headerStyle="width: 10rem">
+                    <template #body="{ data }">
+                        <Button icon="pi pi-pencil" class="mr-2" outlined @click="editEmployee(data)" />
+                        <Button icon="pi pi-trash" severity="danger" outlined @click="confirmDeleteEmployee(data)" />
+                    </template>
+                </Column>
+            </DataTable>
         </div>
-        <div class="md:w-1/2">
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Icons</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button icon="pi pi-star-fill" class="mr-2 mb-2"></Button>
-                    <Button label="Bookmark" icon="pi pi-bookmark" class="mr-2 mb-2"></Button>
-                    <Button label="Bookmark" icon="pi pi-bookmark" iconPos="right" class="mr-2 mb-2"></Button>
+
+        <!-- Employee Dialog -->
+        <Dialog v-model:visible="employeeDialog" :style="{ width: '450px' }" header="Employee Details" :modal="true">
+            <div class="flex flex-col gap-6">
+                <div>
+                    <label for="name" class="block font-bold mb-3">Name</label>
+                    <InputText id="name" v-model.trim="employee.name" required="true" autofocus :invalid="submitted && !employee.name" fluid />
+                    <small v-if="submitted && !employee.name" class="text-red-500">Name is required.</small>
+                </div>
+                <div>
+                    <label for="description" class="block font-bold mb-3">Description</label>
+                    <Textarea id="description" v-model="employee.description" rows="3" cols="20" fluid />
+                </div>
+                <div>
+                    <label for="status" class="block font-bold mb-3">Status</label>
+                    <Select id="status" v-model="employee.status" :options="statuses" optionLabel="label" placeholder="Select a Status" fluid />
                 </div>
             </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Raised</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button label="Primary" raised />
-                    <Button label="Secondary" severity="secondary" raised />
-                    <Button label="Success" severity="success" raised />
-                    <Button label="Info" severity="info" raised />
-                    <Button label="Warn" severity="warn" raised />
-                    <Button label="Help" severity="help" raised />
-                    <Button label="Danger" severity="danger" raised />
-                    <Button label="Contrast" severity="contrast" raised />
-                </div>
+            <template #footer>
+                <Button label="Cancel" icon="pi pi-times" text @click="hideDialog" />
+                <Button label="Save" icon="pi pi-check" @click="saveEmployee" />
+            </template>
+        </Dialog>
+
+        <!-- Delete Employee Dialog -->
+        <Dialog v-model:visible="deleteEmployeeDialog" header="Confirm" :modal="true" :style="{ width: '450px' }">
+            <div class="flex align-items-center gap-3">
+                <i class="pi pi-exclamation-triangle text-3xl" />
+                <span
+                    >Are you sure you want to delete <b>{{ employee.name }}</b
+                    >?</span
+                >
             </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Rounded</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button label="Primary" rounded />
-                    <Button label="Secondary" severity="secondary" rounded />
-                    <Button label="Success" severity="success" rounded />
-                    <Button label="Info" severity="info" rounded />
-                    <Button label="Warn" severity="warn" rounded />
-                    <Button label="Help" severity="help" rounded />
-                    <Button label="Danger" severity="danger" rounded />
-                    <Button label="Contrast" severity="contrast" rounded />
-                </div>
+            <template #footer>
+                <Button label="No" icon="pi pi-times" text @click="deleteEmployeeDialog = false" />
+                <Button label="Yes" icon="pi pi-check" severity="danger" @click="deleteEmployee" />
+            </template>
+        </Dialog>
+
+        <!-- Delete Selected Employees Dialog -->
+        <Dialog v-model:visible="deleteEmployeesDialog" header="Confirm" :modal="true" :style="{ width: '450px' }">
+            <div class="flex align-items-center gap-3">
+                <i class="pi pi-exclamation-triangle text-3xl" />
+                <span>Are you sure you want to delete the selected employees?</span>
             </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Rounded Icons</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button icon="pi pi-check" rounded />
-                    <Button icon="pi pi-bookmark" severity="secondary" rounded />
-                    <Button icon="pi pi-search" severity="success" rounded />
-                    <Button icon="pi pi-user" severity="info" rounded />
-                    <Button icon="pi pi-bell" severity="warn" rounded />
-                    <Button icon="pi pi-heart" severity="help" rounded />
-                    <Button icon="pi pi-times" severity="danger" rounded />
-                </div>
-            </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Rounded Text</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button icon="pi pi-check" text raised rounded />
-                    <Button icon="pi pi-bookmark" severity="secondary" text raised rounded />
-                    <Button icon="pi pi-search" severity="success" text raised rounded />
-                    <Button icon="pi pi-user" severity="info" text raised rounded />
-                    <Button icon="pi pi-bell" severity="warn" text raised rounded />
-                    <Button icon="pi pi-heart" severity="help" text raised rounded />
-                    <Button icon="pi pi-times" severity="danger" text raised rounded />
-                </div>
-            </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Rounded Outlined</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button icon="pi pi-check" rounded outlined />
-                    <Button icon="pi pi-bookmark" severity="secondary" rounded outlined />
-                    <Button icon="pi pi-search" severity="success" rounded outlined />
-                    <Button icon="pi pi-user" severity="info" rounded outlined />
-                    <Button icon="pi pi-bell" severity="warn" rounded outlined />
-                    <Button icon="pi pi-heart" severity="help" rounded outlined />
-                    <Button icon="pi pi-times" severity="danger" rounded outlined />
-                </div>
-            </div>
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Loading</div>
-                <div class="flex flex-wrap gap-2">
-                    <Button type="button" class="mr-2 mb-2" label="Search" icon="pi pi-search" :loading="loading[0]" @click="load(0)" />
-                    <Button type="button" class="mr-2 mb-2" label="Search" icon="pi pi-search" iconPos="right" :loading="loading[1]" @click="load(1)" />
-                    <Button type="button" class="mr-2 mb-2" icon="pi pi-search" :loading="loading[2]" @click="load(2)" />
-                    <Button type="button" class="mr-2 mb-2" label="Search" :loading="loading[3]" @click="load(3)" />
-                </div>
-            </div>
-        </div>
+            <template #footer>
+                <Button label="No" icon="pi pi-times" text @click="deleteEmployeesDialog = false" />
+                <Button label="Yes" icon="pi pi-check" severity="danger" @click="deleteSelectedEmployees" />
+            </template>
+        </Dialog>
     </div>
 </template>
+
+<style scoped>
+.employee-page {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.card {
+    background: var(--surface-card);
+    padding: 2rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.field {
+    margin-bottom: 1.5rem;
+}
+
+.p-fluid .field label {
+    font-weight: bold;
+}
+</style>
