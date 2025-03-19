@@ -6,31 +6,31 @@ const model = ref([
     {
         label: 'HOME',
         items: [
-            { label: 'Dashboard', icon: 'pi pi-fw pi-home', to: '/' },
-            { label: 'Time Tracking', icon: 'pi pi-fw pi-clock', to: '/TimeTracking' }
+            { label: 'Dashboard', icon: 'pi pi-fw pi-home', to: '/app' },
+            { label: 'Time Tracking', icon: 'pi pi-fw pi-clock', to: '/app/TimeTracking' }
         ]
     },
     {
         label: 'MANAGEMENT',
         items: [
-            { label: 'Employee', icon: 'pi pi-fw pi-user', to: '/Employee' },
-            { label: 'Teams', icon: 'pi pi-fw pi-users', to: '/Teams' },
-            { label: 'Project', icon: 'pi pi-fw pi-folder', to: '/Project' },
-            { label: 'Task', icon: 'pi pi-fw pi-list-check', to: '/Task' }
+            { label: 'Employee', icon: 'pi pi-fw pi-user', to: '/app/Employee' },
+            { label: 'Teams', icon: 'pi pi-fw pi-users', to: '/app/Teams' },
+            { label: 'Project', icon: 'pi pi-fw pi-folder', to: '/app/Project' },
+            { label: 'Task', icon: 'pi pi-fw pi-list-check', to: '/app/Task' }
         ]
     },
     {
         label: 'UTILITIES',
         items: [
-            { label: 'Calendar', icon: 'pi pi-fw pi-calendar', to: '/Calendar' },
-            { label: 'Reports', icon: 'pi pi-fw pi-chart-line', to: '/Reports' }
+            { label: 'Calendar', icon: 'pi pi-fw pi-calendar', to: '/app/Calendar' },
+            { label: 'Reports', icon: 'pi pi-fw pi-chart-line', to: '/app/Reports' }
         ]
     },
     {
         label: 'SETTINGS',
         items: [
-            { label: 'Performance', icon: 'pi pi-fw pi-chart-pie', to: '/Performance' },
-            { label: 'Notifications', icon: 'pi pi-fw pi-bell', to: '/Notifications' }
+            { label: 'Performance', icon: 'pi pi-fw pi-chart-pie', to: '/app/Performance' },
+            { label: 'Notifications', icon: 'pi pi-fw pi-bell', to: '/app/Notifications' }
         ]
     }
 ]);
