@@ -1,3 +1,4 @@
+
 <script setup>
 import FloatingConfigurator from '@/components/FloatingConfigurator.vue';
 import { ref, onMounted } from 'vue';
@@ -108,3 +109,4 @@ onMounted(() => {
   margin-top: 1rem;
 }
 </style>
+

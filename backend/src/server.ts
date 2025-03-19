@@ -1,6 +1,6 @@
 import express, { Application } from 'express';
 import { ApolloServer } from 'apollo-server-express';
-import { authMiddleware, createApolloContext } from './middleware/auth';
+import { authMiddleware, createApolloContext } from './middleware/auth'; // Assume authMiddleware handles authentication logic
 
 import { typeDefs } from './graphql/schema'; // Import all type definitions
 import { resolvers } from './graphql/resolvers'; // Import all resolvers
@@ -13,9 +13,9 @@ const app: Application = express();
 const port = process.env.PORT || 3000;
 
 // Google OAuth credentials
-const CLIENT_ID ='17543999702-hf3su5dua5q1fuhfmeth5a6mgtf2acce.apps.googleusercontent.com';
+const CLIENT_ID = '17543999702-hf3su5dua5q1fuhfmeth5a6mgtf2acce.apps.googleusercontent.com';
 const CLIENT_SECRET = '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';
-const REDIRECT_URI = 'http://localhost:3000/callback'; // Ensure this is in Google Cloud Console
+const REDIRECT_URI = 'http://localhost:3000/callback';
 
 // Connect to SQL Server
 connectToDatabase(); // Establish the database connection
@@ -77,7 +77,6 @@ app.get('/callback', async (req, res) => {
     res.status(500).send('Error during authentication');
   }
 });
-
 
 // REST API route for basic testing
 app.get('/', (_req, res) => {
