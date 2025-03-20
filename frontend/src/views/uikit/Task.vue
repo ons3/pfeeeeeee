@@ -1,248 +1,397 @@
 <script setup>
-import { CountryService } from '@/service/CountryService';
-import { NodeService } from '@/service/NodeService';
-import { onMounted, ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { FilterMatchMode } from '@primevue/core/api';
+import { useToast } from 'primevue/usetoast';
 
-const floatValue = ref(null);
-const autoValue = ref(null);
-const selectedAutoValue = ref(null);
-const autoFilteredValue = ref([]);
-const calendarValue = ref(null);
-const inputNumberValue = ref(null);
-const sliderValue = ref(50);
-const ratingValue = ref(null);
-const colorValue = ref('#1976D2');
-const radioValue = ref(null);
-const checkboxValue = ref([]);
-const switchValue = ref(false);
-const listboxValues = ref([
-    { name: 'New York', code: 'NY' },
-    { name: 'Rome', code: 'RM' },
-    { name: 'London', code: 'LDN' },
-    { name: 'Istanbul', code: 'IST' },
-    { name: 'Paris', code: 'PRS' }
-]);
-const listboxValue = ref(null);
-const dropdownValues = ref([
-    { name: 'New York', code: 'NY' },
-    { name: 'Rome', code: 'RM' },
-    { name: 'London', code: 'LDN' },
-    { name: 'Istanbul', code: 'IST' },
-    { name: 'Paris', code: 'PRS' }
-]);
-const dropdownValue = ref(null);
-const multiselectValues = ref([
-    { name: 'Australia', code: 'AU' },
-    { name: 'Brazil', code: 'BR' },
-    { name: 'China', code: 'CN' },
-    { name: 'Egypt', code: 'EG' },
-    { name: 'France', code: 'FR' },
-    { name: 'Germany', code: 'DE' },
-    { name: 'India', code: 'IN' },
-    { name: 'Japan', code: 'JP' },
-    { name: 'Spain', code: 'ES' },
-    { name: 'United States', code: 'US' }
-]);
-
-const multiselectValue = ref(null);
-const toggleValue = ref(false);
-const selectButtonValue = ref(null);
-const selectButtonValues = ref([{ name: 'Option 1' }, { name: 'Option 2' }, { name: 'Option 3' }]);
-const knobValue = ref(50);
-const inputGroupValue = ref(false);
-const treeSelectNodes = ref(null);
-const selectedNode = ref(null);
-
-onMounted(() => {
-    CountryService.getCountries().then((data) => (autoValue.value = data));
-    NodeService.getTreeNodes().then((data) => (treeSelectNodes.value = data));
+const toast = useToast();
+const dt = ref();
+const tasks = ref([]);
+const projects = ref([]); // List of all projects
+const taskDialog = ref(false);
+const deleteTaskDialog = ref(false);
+const deleteTasksDialog = ref(false);
+const task = ref({});
+const selectedTasks = ref([]);
+const filters = ref({
+    global: { value: null, matchMode: FilterMatchMode.CONTAINS }
 });
+const submitted = ref(false);
+const statuses = ref([
+    { label: 'TODO', value: 'TODO' },
+    { label: 'IN_PROGRESS', value: 'IN_PROGRESS' },
+    { label: 'END', value: 'END' }
+]);
 
-function searchCountry(event) {
-    setTimeout(() => {
-        if (!event.query.trim().length) {
-            autoFilteredValue.value = [...autoValue.value];
-        } else {
-            autoFilteredValue.value = autoValue.value.filter((country) => {
-                return country.name.toLowerCase().startsWith(event.query.toLowerCase());
-            });
-        }
-    }, 250);
-}
+// Helper Functions
+const openNew = () => {
+    task.value = {};
+    submitted.value = false;
+    taskDialog.value = true;
+};
+
+const hideDialog = () => {
+    taskDialog.value = false;
+    submitted.value = false;
+};
+
+// Validate Task Title
+const validateTitle = (title) => {
+    if (!title || title.trim().length === 0) {
+        return 'Task title is required.';
+    }
+    if (title.length < 2 || title.length > 50) {
+        return 'Task title must be between 2 and 50 characters.';
+    }
+    return null;
+};
+
+// Validate Task Description
+const validateDescription = (description) => {
+    if (description && (description.length < 10 || description.length > 500)) {
+        return 'Task description must be between 10 and 500 characters.';
+    }
+    return null;
+};
+
+// Validate Task Dates
+const validateDates = (startDate, endDate) => {
+    if (!startDate) {
+        return 'Start date is required.';
+    }
+    if (endDate && new Date(endDate) < new Date(startDate)) {
+        return 'End date must be after start date.';
+    }
+    return null;
+};
+
+// Validate Project
+const validateProject = (idProjet) => {
+    if (!idProjet) {
+        return 'Project is required.';
+    }
+    return null;
+};
+
+const saveTask = () => {
+    submitted.value = true;
+
+    // Validate Task Title
+    const titleError = validateTitle(task.value.titreTache);
+    if (titleError) {
+        toast.add({ severity: 'error', summary: 'Error', detail: titleError, life: 3000 });
+        return;
+    }
+
+    // Validate Task Description
+    const descriptionError = validateDescription(task.value.descriptionTache);
+    if (descriptionError) {
+        toast.add({ severity: 'error', summary: 'Error', detail: descriptionError, life: 3000 });
+        return;
+    }
+
+    // Validate Task Dates
+    const datesError = validateDates(task.value.dateDebutTache, task.value.dateFinTache);
+    if (datesError) {
+        toast.add({ severity: 'error', summary: 'Error', detail: datesError, life: 3000 });
+        return;
+    }
+
+    // Validate Project
+    const projectError = validateProject(task.value.idProjet);
+    if (projectError) {
+        toast.add({ severity: 'error', summary: 'Error', detail: projectError, life: 3000 });
+        return;
+    }
+
+    // Save Task
+    if (task.value.idTache) {
+        const index = findIndexById(task.value.idTache);
+        tasks.value[index] = { ...task.value };
+        toast.add({ severity: 'success', summary: 'Successful', detail: 'Task Updated', life: 3000 });
+    } else {
+        task.value.idTache = createId();
+        task.value.titreTache = task.value.titreTache.trim();
+        task.value.descriptionTache = task.value.descriptionTache?.trim() || '';
+        task.value.dateDebutTache = task.value.dateDebutTache;
+        task.value.dateFinTache = task.value.dateFinTache;
+        task.value.statutTache = task.value.statutTache || 'TODO';
+        task.value.duration = task.value.duration || 0;
+        task.value.idProjet = task.value.idProjet;
+        tasks.value.push({ ...task.value });
+        toast.add({ severity: 'success', summary: 'Successful', detail: 'Task Created', life: 3000 });
+    }
+
+    taskDialog.value = false;
+    task.value = {};
+};
+
+const editTask = (t) => {
+    task.value = { ...t };
+    taskDialog.value = true;
+};
+
+const confirmDeleteTask = (t) => {
+    task.value = t;
+    deleteTaskDialog.value = true;
+};
+
+const deleteTask = () => {
+    tasks.value = tasks.value.filter((val) => val.idTache !== task.value.idTache);
+    deleteTaskDialog.value = false;
+    task.value = {};
+    toast.add({ severity: 'success', summary: 'Successful', detail: 'Task Deleted', life: 3000 });
+};
+
+const findIndexById = (id) => {
+    return tasks.value.findIndex((t) => t.idTache === id);
+};
+
+const createId = () => {
+    return Math.random().toString(36).substring(2, 9);
+};
+
+const exportCSV = () => {
+    dt.value.exportCSV();
+};
+
+const confirmDeleteSelected = () => {
+    deleteTasksDialog.value = true;
+};
+
+const deleteSelectedTasks = () => {
+    tasks.value = tasks.value.filter((val) => !selectedTasks.value.includes(val));
+    deleteTasksDialog.value = false;
+    selectedTasks.value = [];
+    toast.add({ severity: 'success', summary: 'Successful', detail: 'Tasks Deleted', life: 3000 });
+};
+
+const getStatusLabel = (status) => {
+    switch (status) {
+        case 'TODO':
+            return 'info';
+        case 'IN_PROGRESS':
+            return 'warning';
+        case 'END':
+            return 'success';
+        default:
+            return 'info';
+    }
+};
+
+// Add 20 sample tasks and projects on component mount
+onMounted(() => {
+    for (let i = 1; i <= 20; i++) {
+        projects.value.push({
+            idProjet: createId(),
+            nom_projet: `Project ${i}`
+        });
+
+        tasks.value.push({
+            idTache: createId(),
+            titreTache: `Task ${i}`,
+            descriptionTache: `Description for Task ${i}`,
+            dateDebutTache: '2023-01-01',
+            dateFinTache: '2023-12-31',
+            statutTache: i % 3 === 0 ? 'TODO' : i % 3 === 1 ? 'IN_PROGRESS' : 'END',
+            duration: i * 10,
+            idProjet: projects.value[i - 1].idProjet, // Associate task with a project
+            idAdministrateur: `Admin ${i}`
+        });
+    }
+});
 </script>
 
 <template>
-    <Fluid class="flex flex-col md:flex-row gap-8">
-        <div class="md:w-1/2">
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">InputText</div>
-                <div class="flex flex-col md:flex-row gap-4">
-                    <InputText type="text" placeholder="Default" />
-                    <InputText type="text" placeholder="Disabled" :disabled="true" />
-                    <InputText type="text" placeholder="Invalid" invalid />
-                </div>
+    <div class="p-4 task-page">
+        <div class="card">
+            <!-- Toolbar -->
+            <Toolbar class="mb-4">
+                <template #start>
+                    <Button label="New" icon="pi pi-plus" class="mr-2" @click="openNew" />
+                    <Button label="Delete" icon="pi pi-trash" severity="danger" @click="confirmDeleteSelected" :disabled="!selectedTasks || !selectedTasks.length" />
+                </template>
+                <template #end>
+                    <Button label="Export" icon="pi pi-upload" @click="exportCSV" />
+                </template>
+            </Toolbar>
 
-                <div class="font-semibold text-xl">Icons</div>
-                <IconField>
-                    <InputIcon class="pi pi-user" />
-                    <InputText type="text" placeholder="Username" />
-                </IconField>
-                <IconField iconPosition="left">
-                    <InputText type="text" placeholder="Search" />
-                    <InputIcon class="pi pi-search" />
-                </IconField>
-
-                <div class="font-semibold text-xl">Float Label</div>
-                <FloatLabel>
-                    <InputText id="username" type="text" v-model="floatValue" />
-                    <label for="username">Username</label>
-                </FloatLabel>
-
-                <div class="font-semibold text-xl">Textarea</div>
-                <Textarea placeholder="Your Message" :autoResize="true" rows="3" cols="30" />
-
-                <div class="font-semibold text-xl">AutoComplete</div>
-                <AutoComplete v-model="selectedAutoValue" :suggestions="autoFilteredValue" optionLabel="name" placeholder="Search" dropdown multiple display="chip" @complete="searchCountry($event)" />
-
-                <div class="font-semibold text-xl">DatePicker</div>
-                <DatePicker :showIcon="true" :showButtonBar="true" v-model="calendarValue"></DatePicker>
-
-                <div class="font-semibold text-xl">InputNumber</div>
-                <InputNumber v-model="inputNumberValue" showButtons mode="decimal"></InputNumber>
-            </div>
-
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Slider</div>
-                <InputText v-model.number="sliderValue" />
-                <Slider v-model="sliderValue" />
-
-                <div class="flex flex-row mt-6">
-                    <div class="flex flex-col gap-4 w-1/2">
-                        <div class="font-semibold text-xl">Rating</div>
-                        <Rating v-model="ratingValue" />
+            <!-- DataTable -->
+            <DataTable
+                ref="dt"
+                v-model:selection="selectedTasks"
+                :value="tasks"
+                dataKey="idTache"
+                :paginator="true"
+                :rows="10"
+                :filters="filters"
+                paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+                :rowsPerPageOptions="[5, 10, 25]"
+                currentPageReportTemplate="Showing {first} to {last} of {totalRecords} tasks"
+            >
+                <template #header>
+                    <div class="flex flex-wrap gap-2 align-items-center justify-content-between">
+                        <h4 class="m-0">Manage Tasks</h4>
+                        <IconField iconPosition="left">
+                            <InputIcon>
+                                <i class="pi pi-search" />
+                            </InputIcon>
+                            <InputText v-model="filters['global'].value" placeholder="Search..." />
+                        </IconField>
                     </div>
-                    <div class="flex flex-col gap-4 w-1/2">
-                        <div class="font-semibold text-xl">ColorPicker</div>
-                        <ColorPicker style="width: 2rem" v-model="colorValue" />
-                    </div>
-                </div>
+                </template>
 
-                <div class="font-semibold text-xl">Knob</div>
-                <Knob v-model="knobValue" :step="10" :min="-50" :max="50" valueTemplate="{value}%" />
-            </div>
-        </div>
-        <div class="md:w-1/2">
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">RadioButton</div>
-                <div class="flex flex-col md:flex-row gap-4">
-                    <div class="flex items-center">
-                        <RadioButton id="option1" name="option" value="Chicago" v-model="radioValue" />
-                        <label for="option1" class="leading-none ml-2">Chicago</label>
-                    </div>
-                    <div class="flex items-center">
-                        <RadioButton id="option2" name="option" value="Los Angeles" v-model="radioValue" />
-                        <label for="option2" class="leading-none ml-2">Los Angeles</label>
-                    </div>
-                    <div class="flex items-center">
-                        <RadioButton id="option3" name="option" value="New York" v-model="radioValue" />
-                        <label for="option3" class="leading-none ml-2">New York</label>
-                    </div>
-                </div>
-
-                <div class="font-semibold text-xl">Checkbox</div>
-                <div class="flex flex-col md:flex-row gap-4">
-                    <div class="flex items-center">
-                        <Checkbox id="checkOption1" name="option" value="Chicago" v-model="checkboxValue" />
-                        <label for="checkOption1" class="ml-2">Chicago</label>
-                    </div>
-                    <div class="flex items-center">
-                        <Checkbox id="checkOption2" name="option" value="Los Angeles" v-model="checkboxValue" />
-                        <label for="checkOption2" class="ml-2">Los Angeles</label>
-                    </div>
-                    <div class="flex items-center">
-                        <Checkbox id="checkOption3" name="option" value="New York" v-model="checkboxValue" />
-                        <label for="checkOption3" class="ml-2">New York</label>
-                    </div>
-                </div>
-
-                <div class="font-semibold text-xl">ToggleSwitch</div>
-                <ToggleSwitch v-model="switchValue" />
-            </div>
-
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">Listbox</div>
-                <Listbox v-model="listboxValue" :options="listboxValues" optionLabel="name" :filter="true" />
-
-                <div class="font-semibold text-xl">Select</div>
-                <Select v-model="dropdownValue" :options="dropdownValues" optionLabel="name" placeholder="Select" />
-
-                <div class="font-semibold text-xl">MultiSelect</div>
-                <MultiSelect v-model="multiselectValue" :options="multiselectValues" optionLabel="name" placeholder="Select Countries" :filter="true">
-                    <template #value="slotProps">
-                        <div class="inline-flex items-center py-1 px-2 bg-primary text-primary-contrast rounded-border mr-2" v-for="option of slotProps.value" :key="option.code">
-                            <span :class="'mr-2 flag flag-' + option.code.toLowerCase()" style="width: 18px; height: 12px" />
-                            <div>{{ option.name }}</div>
-                        </div>
-                        <template v-if="!slotProps.value || slotProps.value.length === 0">
-                            <div class="p-1">Select Countries</div>
-                        </template>
+                <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
+                <Column field="idTache" header="ID" sortable></Column>
+                <Column field="titreTache" header="Title" sortable></Column>
+                <Column field="descriptionTache" header="Description" sortable></Column>
+                <Column field="dateDebutTache" header="Start Date" sortable>
+                    <template #body="{ data }">
+                        {{ new Date(data.dateDebutTache).toLocaleDateString() }}
                     </template>
-                    <template #option="slotProps">
-                        <div class="flex items-center">
-                            <span :class="'mr-2 flag flag-' + slotProps.option.code.toLowerCase()" style="width: 18px; height: 12px" />
-                            <div>{{ slotProps.option.name }}</div>
-                        </div>
+                </Column>
+                <Column field="dateFinTache" header="End Date" sortable>
+                    <template #body="{ data }">
+                        {{ data.dateFinTache ? new Date(data.dateFinTache).toLocaleDateString() : 'N/A' }}
                     </template>
-                </MultiSelect>
-
-                <div class="font-semibold text-xl">TreeSelect</div>
-                <TreeSelect v-model="selectedNode" :options="treeSelectNodes" placeholder="Select Item"></TreeSelect>
-            </div>
-
-            <div class="card flex flex-col gap-4">
-                <div class="font-semibold text-xl">ToggleButton</div>
-                <ToggleButton v-model="toggleValue" onLabel="Yes" offLabel="No" :style="{ width: '10em' }" />
-
-                <div class="font-semibold text-xl">SelectButton</div>
-                <SelectButton v-model="selectButtonValue" :options="selectButtonValues" optionLabel="name" />
-            </div>
+                </Column>
+                <Column field="statutTache" header="Status" sortable>
+                    <template #body="{ data }">
+                        <Tag :value="data.statutTache" :severity="getStatusLabel(data.statutTache)" />
+                    </template>
+                </Column>
+                <Column field="duration" header="Duration (hours)" sortable></Column>
+                <Column field="idProjet" header="Project" sortable>
+                    <template #body="{ data }">
+                        {{ projects.find((p) => p.idProjet === data.idProjet)?.nom_projet || 'N/A' }}
+                    </template>
+                </Column>
+                <Column header="Actions" headerStyle="width: 10rem">
+                    <template #body="{ data }">
+                        <Button icon="pi pi-pencil" class="mr-2" outlined @click="editTask(data)" />
+                        <Button icon="pi pi-trash" severity="danger" outlined @click="confirmDeleteTask(data)" />
+                    </template>
+                </Column>
+            </DataTable>
         </div>
-    </Fluid>
 
-    <Fluid class="flex mt-8">
-        <div class="card flex flex-col gap-4 w-full">
-            <div class="font-semibold text-xl">InputGroup</div>
-            <div class="flex flex-col md:flex-row gap-4">
-                <InputGroup>
-                    <InputGroupAddon>
-                        <i class="pi pi-user"></i>
-                    </InputGroupAddon>
-                    <InputText placeholder="Username" />
-                </InputGroup>
-                <InputGroup>
-                    <InputGroupAddon>
-                        <i class="pi pi-clock"></i>
-                    </InputGroupAddon>
-                    <InputGroupAddon>
-                        <i class="pi pi-star-fill"></i>
-                    </InputGroupAddon>
-                    <InputNumber placeholder="Price" />
-                    <InputGroupAddon>$</InputGroupAddon>
-                    <InputGroupAddon>.00</InputGroupAddon>
-                </InputGroup>
+        <!-- Task Dialog -->
+        <Dialog v-model:visible="taskDialog" :style="{ width: '600px' }" header="Task Details" :modal="true">
+            <div class="flex flex-col gap-6">
+                <div>
+                    <label for="titreTache" class="block mb-3 font-bold">Title</label>
+                    <InputText id="titreTache" v-model.trim="task.titreTache" required="true" autofocus :invalid="submitted && !task.titreTache" fluid />
+                    <small v-if="submitted && validateTitle(task.titreTache)" class="text-red-500">{{ validateTitle(task.titreTache) }}</small>
+                </div>
+                <div>
+                    <label for="descriptionTache" class="block mb-3 font-bold">Description</label>
+                    <Textarea id="descriptionTache" v-model.trim="task.descriptionTache" rows="3" cols="20" fluid />
+                    <small v-if="submitted && validateDescription(task.descriptionTache)" class="text-red-500">{{ validateDescription(task.descriptionTache) }}</small>
+                </div>
+                <div>
+                    <label for="dateDebutTache" class="block mb-3 font-bold">Start Date</label>
+                    <Calendar
+                        id="dateDebutTache"
+                        v-model="task.dateDebutTache"
+                        :showIcon="true"
+                        dateFormat="yy-mm-dd"
+                        placeholder="Select a Start Date"
+                        class="w-full"
+                    />
+                </div>
+                <div>
+                    <label for="dateFinTache" class="block mb-3 font-bold">End Date</label>
+                    <Calendar
+                        id="dateFinTache"
+                        v-model="task.dateFinTache"
+                        :showIcon="true"
+                        dateFormat="yy-mm-dd"
+                        placeholder="Select an End Date"
+                        :minDate="task.dateDebutTache ? new Date(task.dateDebutTache) : null"
+                        class="w-full"
+                    />
+                    <small v-if="submitted && validateDates(task.dateDebutTache, task.dateFinTache)" class="text-red-500">{{ validateDates(task.dateDebutTache, task.dateFinTache) }}</small>
+                </div>
+                <div>
+                    <label for="statutTache" class="block mb-3 font-bold">Status</label>
+                    <Dropdown
+                        id="statutTache"
+                        v-model="task.statutTache"
+                        :options="statuses"
+                        optionLabel="label"
+                        placeholder="Select a Status"
+                        class="w-full"
+                    />
+                </div>
+                <div>
+                    <label for="duration" class="block mb-3 font-bold">Duration (hours)</label>
+                    <InputNumber id="duration" v-model="task.duration" mode="decimal" :min="0" class="w-full" />
+                </div>
+                <div>
+                    <label for="idProjet" class="block mb-3 font-bold">Project</label>
+                    <Dropdown
+                        id="idProjet"
+                        v-model="task.idProjet"
+                        :options="projects"
+                        optionLabel="nom_projet"
+                        placeholder="Select a Project"
+                        class="w-full"
+                    />
+                    <small v-if="submitted && validateProject(task.idProjet)" class="text-red-500">{{ validateProject(task.idProjet) }}</small>
+                </div>
             </div>
-            <div class="flex flex-col md:flex-row gap-4">
-                <InputGroup>
-                    <Button label="Search" />
-                    <InputText placeholder="Keyword" />
-                </InputGroup>
-                <InputGroup>
-                    <InputGroupAddon>
-                        <Checkbox v-model="inputGroupValue" :binary="true" />
-                    </InputGroupAddon>
-                    <InputText placeholder="Confirm" />
-                </InputGroup>
+            <template #footer>
+                <Button label="Cancel" icon="pi pi-times" text @click="hideDialog" />
+                <Button label="Save" icon="pi pi-check" @click="saveTask" />
+            </template>
+        </Dialog>
+
+        <!-- Delete Task Dialog -->
+        <Dialog v-model:visible="deleteTaskDialog" header="Confirm" :modal="true" :style="{ width: '450px' }">
+            <div class="flex gap-3 align-items-center">
+                <i class="text-3xl pi pi-exclamation-triangle" />
+                <span
+                    >Are you sure you want to delete <b>{{ task.titreTache }}</b
+                    >?</span
+                >
             </div>
-        </div>
-    </Fluid>
+            <template #footer>
+                <Button label="No" icon="pi pi-times" text @click="deleteTaskDialog = false" />
+                <Button label="Yes" icon="pi pi-check" severity="danger" @click="deleteTask" />
+            </template>
+        </Dialog>
+
+        <!-- Delete Selected Tasks Dialog -->
+        <Dialog v-model:visible="deleteTasksDialog" header="Confirm" :modal="true" :style="{ width: '450px' }">
+            <div class="flex gap-3 align-items-center">
+                <i class="text-3xl pi pi-exclamation-triangle" />
+                <span>Are you sure you want to delete the selected tasks?</span>
+            </div>
+            <template #footer>
+                <Button label="No" icon="pi pi-times" text @click="deleteTasksDialog = false" />
+                <Button label="Yes" icon="pi pi-check" severity="danger" @click="deleteSelectedTasks" />
+            </template>
+        </Dialog>
+    </div>
 </template>
+
+<style scoped>
+.task-page {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.card {
+    background: var(--surface-card);
+    padding: 2rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.field {
+    margin-bottom: 1.5rem;
+}
+
+.p-fluid .field label {
+    font-weight: bold;
+}
+</style>
