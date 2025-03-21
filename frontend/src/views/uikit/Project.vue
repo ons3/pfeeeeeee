@@ -1,12 +1,14 @@
 <script setup>
 import { ref, onMounted } from 'vue';
+import { useQuery, useMutation } from '@vue/apollo-composable';
+import { gql } from '@apollo/client/core';
 import { FilterMatchMode } from '@primevue/core/api';
 import { useToast } from 'primevue/usetoast';
 import RelationshipManager from './RelationshipManager.vue';
 
 const toast = useToast();
 const dt = ref();
-const projects = ref([]);
+const projects = ref([]); // Will be populated from the GraphQL query
 const teams = ref([]); // List of all teams
 const projetEquipes = ref([]); // Many-to-many relationship between projects and teams
 const projectDialog = ref(false);
@@ -23,6 +25,43 @@ const statuses = ref([
     { label: 'IN_PROGRESS', value: 'in_progress' },
     { label: 'END', value: 'end' }
 ]);
+
+// GraphQL Query to Fetch Projects
+const GET_PROJECTS = gql`
+  query GetProjects {
+    projets {
+      idProjet
+      nom_projet
+      description_projet
+      date_debut_projet
+      date_fin_projet
+      statut_projet
+    }
+  }
+`;
+
+// GraphQL Mutation to Delete a Project
+const DELETE_PROJECT = gql`
+  mutation DeleteProjet($id: String!) {
+    deleteProjet(id: $id) {
+      success
+      message
+    }
+  }
+`;
+
+// Use Apollo Client to Fetch Projects
+const { result, loading, error } = useQuery(GET_PROJECTS);
+
+// Use Apollo Client to Delete a Project
+const { mutate: deleteProjetMutation } = useMutation(DELETE_PROJECT);
+
+// Watch for changes in the result and update the projects ref
+onMounted(() => {
+  if (result.value) {
+    projects.value = result.value.projets;
+  }
+});
 
 // Helper Functions
 const openNew = () => {
@@ -150,13 +189,31 @@ const confirmDeleteProject = (proj) => {
     deleteProjectDialog.value = true;
 };
 
-const deleteProject = () => {
-    projects.value = projects.value.filter((val) => val.idProjet !== project.value.idProjet);
-    // Remove all relationships for this project
-    projetEquipes.value = projetEquipes.value.filter((pe) => pe.idProjet !== project.value.idProjet);
+const deleteProject = async () => {
+  try {
+    const { data } = await deleteProjetMutation({ id: project.value.idProjet });
+
+    if (data.deleteProjet.success) {
+      // Remove the project from the local state
+      projects.value = projects.value.filter((val) => val.idProjet !== project.value.idProjet);
+      // Remove all relationships for this project
+      projetEquipes.value = projetEquipes.value.filter((pe) => pe.idProjet !== project.value.idProjet);
+
+      // Show success message
+      toast.add({ severity: 'success', summary: 'Successful', detail: data.deleteProjet.message, life: 3000 });
+    } else {
+      // Show error message if deletion was not successful
+      toast.add({ severity: 'error', summary: 'Error', detail: data.deleteProjet.message, life: 3000 });
+    }
+  } catch (error) {
+    // Handle any errors
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete project.', life: 3000 });
+    console.error('Error deleting project:', error);
+  } finally {
+    // Close the delete confirmation dialog
     deleteProjectDialog.value = false;
     project.value = {};
-    toast.add({ severity: 'success', summary: 'Successful', detail: 'Project Deleted', life: 3000 });
+  }
 };
 
 const findIndexById = (id) => {
@@ -224,18 +281,9 @@ const getTeamsForProject = (idProjet) => {
     return projetEquipes.value.filter((pe) => pe.idProjet === idProjet).map((pe) => teams.value.find((t) => t.idEquipe === pe.idEquipe));
 };
 
-// Add 20 sample projects and teams on component mount
+// Add sample teams on component mount
 onMounted(() => {
     for (let i = 1; i <= 25; i++) {
-        projects.value.push({
-            idProjet: createId(),
-            nom_projet: `Project ${i}`,
-            description_projet: `Description for Project ${i}`,
-            date_debut_projet: '2023-01-01',
-            date_fin_projet: '2023-12-31',
-            statut_projet: i % 3 === 0 ? 'todo' : i % 3 === 1 ? 'in_progress' : 'end'
-        });
-
         teams.value.push({
             idEquipe: createId(),
             nom_equipe: `Team ${i}`,
@@ -244,9 +292,9 @@ onMounted(() => {
     }
 
     // Add some sample relationships
-    addEquipeToProject(projects.value[0].idProjet, teams.value[0].idEquipe);
-    addEquipeToProject(projects.value[0].idProjet, teams.value[1].idEquipe);
-    addEquipeToProject(projects.value[1].idProjet, teams.value[0].idEquipe);
+    addEquipeToProject(projects.value[0]?.idProjet, teams.value[0].idEquipe);
+    addEquipeToProject(projects.value[0]?.idProjet, teams.value[1].idEquipe);
+    addEquipeToProject(projects.value[1]?.idProjet, teams.value[0].idEquipe);
 });
 </script>
 
