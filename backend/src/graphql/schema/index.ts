@@ -6,7 +6,7 @@ import { tacheTypeDefs } from "./tacheSchema";
 import { employeeTypeDefs } from "./employeeSchema";
 import { alertTypeDefs } from "./alertSchema";
 import { suiviDeTempTypeDefs } from "./suiviDeTempsSchema";
-import { administrateurTypeDefs } from "./administrateurSchema";
+import { adminTypeDefs } from "./administrateurSchema";
 import { superviseurTypeDefs } from "./superviseurSchema";
 
 
@@ -39,6 +39,6 @@ export const typeDefs = gql`
   ${tacheTypeDefs}
   ${alertTypeDefs}
   ${suiviDeTempTypeDefs}
-  ${administrateurTypeDefs}
+  ${adminTypeDefs}
   ${superviseurTypeDefs}
 `;

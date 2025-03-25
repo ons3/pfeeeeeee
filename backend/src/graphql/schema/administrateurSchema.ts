@@ -1,27 +1,6 @@
-import sql from 'mssql';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import { OAuth2Client } from 'google-auth-library';
-import { v4 as uuidv4 } from 'uuid';
+import { gql } from 'graphql-tag';
 
-// Configuration du client Google OAuth
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-// Génération de token JWT
-const generateToken = (admin: { idAdministrateur: string; nom_administrateur: string; email_administrateur: string; role: string }) => {
-  return jwt.sign(
-    { 
-      id: admin.idAdministrateur, 
-      email: admin.email_administrateur, 
-      nom: admin.nom_administrateur,
-      role: 'ADMIN' // Crucial pour distinguer les administrateurs des employés
-    },
-    process.env.JWT_SECRET || 'default_secret_change_this_in_production',
-    { expiresIn: '24h' }
-  );
-};
-
-export const administrateurTypeDefs = `
+export const adminTypeDefs = gql`
   type Administrateur {
     idAdministrateur: String!
     nom_administrateur: String!
@@ -29,7 +8,6 @@ export const administrateurTypeDefs = `
     googleId: String
     isActive: Boolean
     role: String!
-
   }
 
   type AdministrateurResponse {
@@ -45,7 +23,8 @@ export const administrateurTypeDefs = `
   }
 
   extend type Query {
-    administrateur: AdministrateurResponse!
+    administrateur(email_administrateur: String!): AdministrateurResponse!
+    getAdministrateur(email_administrateur: String!): AdministrateurResponse!  # Add this line
     allAdministrateurs: [Administrateur]!
   }
 
