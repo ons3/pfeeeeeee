@@ -2,7 +2,7 @@ import sql, { ConnectionPool } from 'mssql';
 
 // SQL Server configuration
 const config = {
-  user: 'SA',
+  user: 'sa',
   password: 'YourPassword123!',
   server: 'localhost',
   database: 'time_tracking',
