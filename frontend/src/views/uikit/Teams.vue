@@ -1,28 +1,150 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, watch, onMounted } from 'vue';
+import { useQuery, useMutation } from '@vue/apollo-composable';
+import { gql } from '@apollo/client/core';
 import { FilterMatchMode } from '@primevue/core/api';
 import { useToast } from 'primevue/usetoast';
-import RelationshipManager from './RelationshipManager.vue';
+import ProgressSpinner from 'primevue/progressspinner';
 
 const toast = useToast();
 const dt = ref();
 const teams = ref([]);
-const projects = ref([]); // List of all projects
-const projetEquipes = ref([]); // Many-to-many relationship between teams and projects
 const teamDialog = ref(false);
 const deleteTeamDialog = ref(false);
 const deleteTeamsDialog = ref(false);
 const team = ref({});
 const selectedTeams = ref([]);
+const submitted = ref(false);
+const loading = ref(false);
+
 const filters = ref({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS }
 });
-const submitted = ref(false);
 
-// Helper Functions
+// GraphQL Queries
+const GET_TEAMS = gql`
+    query GetTeams {
+        equipes {
+            idEquipe
+            nom_equipe
+            description_equipe
+        }
+    }
+`;
+
+const CREATE_TEAM = gql`
+    mutation CreateEquipe($nom_equipe: String!, $description_equipe: String) {
+        createEquipe(nom_equipe: $nom_equipe, description_equipe: $description_equipe) {
+            idEquipe
+            nom_equipe
+            description_equipe
+        }
+    }
+`;
+
+const UPDATE_TEAM = gql`
+    mutation UpdateEquipe($id: String!, $nom_equipe: String, $description_equipe: String) {
+        updateEquipe(id: $id, nom_equipe: $nom_equipe, description_equipe: $description_equipe) {
+            idEquipe
+            nom_equipe
+            description_equipe
+        }
+    }
+`;
+
+const DELETE_TEAM = gql`
+    mutation DeleteEquipe($id: String!) {
+        deleteEquipe(id: $id) {
+            success
+            message
+        }
+    }
+`;
+
+// Queries and Mutations
+const {
+    result,
+    loading: teamsLoading,
+    error: teamsError,
+    refetch
+} = useQuery(GET_TEAMS, null, {
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all'
+});
+
+onMounted(async () => {
+    try {
+        await refetch();
+    } catch (error) {
+        console.error('Error refetching teams:', error);
+    }
+});
+
+// For createTeam
+const { mutate: createTeam } = useMutation(CREATE_TEAM, {
+    update(cache, { data: { createEquipe } }) {
+        const existingData = cache.readQuery({ query: GET_TEAMS });
+        if (existingData) {
+            cache.writeQuery({
+                query: GET_TEAMS,
+                data: {
+                    equipes: [...existingData.equipes, createEquipe]
+                }
+            });
+        }
+    }
+});
+
+// For updateTeam
+const { mutate: updateTeam } = useMutation(UPDATE_TEAM, {
+    update(cache, { data: { updateEquipe } }) {
+        const existingData = cache.readQuery({ query: GET_TEAMS });
+        if (existingData) {
+            cache.writeQuery({
+                query: GET_TEAMS,
+                data: {
+                    equipes: existingData.equipes.map((t) => (t.idEquipe === updateEquipe.idEquipe ? updateEquipe : t))
+                }
+            });
+        }
+    }
+});
+
+// For deleteTeam
+const { mutate: deleteEquipeMutation } = useMutation(DELETE_TEAM);
+
+// Watch for data changes
+watch(result, (newResult) => {
+    if (newResult?.equipes) {
+        teams.value = newResult.equipes;
+    }
+});
+
+// Error handling
+watch(teamsError, (error) => {
+    if (error) {
+        console.error('Error loading teams:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to load teams',
+            life: 3000
+        });
+    }
+});
+
+// Team CRUD Operations
 const openNew = () => {
-    team.value = {};
+    team.value = {
+        nom_equipe: '',
+        description_equipe: ''
+    };
     submitted.value = false;
+    teamDialog.value = true;
+};
+
+const editTeam = (t) => {
+    team.value = { ...t };
     teamDialog.value = true;
 };
 
@@ -31,7 +153,152 @@ const hideDialog = () => {
     submitted.value = false;
 };
 
-// Validate Team Name
+const saveTeam = async () => {
+    submitted.value = true;
+
+    const nameError = validateName(team.value.nom_equipe);
+    const descriptionError = validateDescription(team.value.description_equipe);
+
+    if (nameError || descriptionError) {
+        if (nameError) {
+            toast.add({
+                severity: 'error',
+                summary: 'Error',
+                detail: nameError,
+                life: 3000
+            });
+        }
+        if (descriptionError) {
+            toast.add({
+                severity: 'error',
+                summary: 'Error',
+                detail: descriptionError,
+                life: 3000
+            });
+        }
+        return;
+    }
+
+    loading.value = true;
+
+    try {
+        const teamData = {
+            nom_equipe: team.value.nom_equipe,
+            description_equipe: team.value.description_equipe
+        };
+
+        if (team.value.idEquipe) {
+            await updateTeam({
+                id: team.value.idEquipe,
+                ...teamData
+            });
+            toast.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: 'Team updated',
+                life: 3000
+            });
+        } else {
+            await createTeam(teamData);
+            toast.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: 'Team created',
+                life: 3000
+            });
+        }
+
+        await refetch();
+        teamDialog.value = false;
+        team.value = {};
+    } catch (error) {
+        console.error('Error saving team:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to save team',
+            life: 3000
+        });
+    } finally {
+        loading.value = false;
+    }
+};
+
+// Delete Operations
+const confirmDeleteTeam = (t) => {
+    team.value = t;
+    deleteTeamDialog.value = true;
+};
+
+const deleteTeam = async () => {
+    try {
+        const { data } = await deleteEquipeMutation({ id: team.value.idEquipe });
+        if (data.deleteEquipe.success) {
+            await refetch();
+            toast.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: data.deleteEquipe.message,
+                life: 3000
+            });
+        } else {
+            toast.add({
+                severity: 'error',
+                summary: 'Error',
+                detail: data.deleteEquipe.message,
+                life: 3000
+            });
+        }
+    } catch (error) {
+        console.error('Error deleting team:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to delete team',
+            life: 3000
+        });
+    } finally {
+        deleteTeamDialog.value = false;
+        team.value = {};
+    }
+};
+
+const confirmDeleteSelected = () => {
+    deleteTeamsDialog.value = true;
+};
+
+const deleteSelectedTeams = async () => {
+    try {
+        const deletePromises = selectedTeams.value.map((team) => deleteEquipeMutation({ id: team.idEquipe }));
+
+        await Promise.all(deletePromises);
+        await refetch();
+
+        toast.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Selected teams deleted',
+            life: 3000
+        });
+    } catch (error) {
+        console.error('Error deleting selected teams:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to delete selected teams',
+            life: 3000
+        });
+    } finally {
+        deleteTeamsDialog.value = false;
+        selectedTeams.value = [];
+    }
+};
+
+// Utility Functions
+const exportCSV = () => {
+    dt.value.exportCSV();
+};
+
 const validateName = (name) => {
     if (!name || name.trim().length === 0) {
         return 'Team name is required.';
@@ -45,7 +312,6 @@ const validateName = (name) => {
     return null;
 };
 
-// Validate Team Description
 const validateDescription = (description) => {
     if (!description || description.trim().length === 0) {
         return 'Team description is required.';
@@ -55,136 +321,6 @@ const validateDescription = (description) => {
     }
     return null;
 };
-
-const saveTeam = () => {
-    submitted.value = true;
-
-    // Validate Team Name
-    const nameError = validateName(team.value.nom_equipe);
-    if (nameError) {
-        toast.add({ severity: 'error', summary: 'Error', detail: nameError, life: 3000 });
-        return;
-    }
-
-    // Validate Team Description
-    const descriptionError = validateDescription(team.value.description_equipe);
-    if (descriptionError) {
-        toast.add({ severity: 'error', summary: 'Error', detail: descriptionError, life: 3000 });
-        return;
-    }
-
-    // Save Team
-    if (team.value.idEquipe) {
-        const index = findIndexById(team.value.idEquipe);
-        teams.value[index] = { ...team.value };
-        toast.add({ severity: 'success', summary: 'Successful', detail: 'Team Updated', life: 3000 });
-    } else {
-        team.value.idEquipe = createId();
-        team.value.nom_equipe = team.value.nom_equipe.trim();
-        team.value.description_equipe = team.value.description_equipe.trim();
-        teams.value.push({ ...team.value });
-        toast.add({ severity: 'success', summary: 'Successful', detail: 'Team Created', life: 3000 });
-    }
-
-    teamDialog.value = false;
-    team.value = {};
-};
-
-const editTeam = (t) => {
-    team.value = { ...t };
-    teamDialog.value = true;
-};
-
-const confirmDeleteTeam = (t) => {
-    team.value = t;
-    deleteTeamDialog.value = true;
-};
-
-const deleteTeam = () => {
-    teams.value = teams.value.filter((val) => val.idEquipe !== team.value.idEquipe);
-    // Remove all relationships for this team
-    projetEquipes.value = projetEquipes.value.filter((pe) => pe.idEquipe !== team.value.idEquipe);
-    deleteTeamDialog.value = false;
-    team.value = {};
-    toast.add({ severity: 'success', summary: 'Successful', detail: 'Team Deleted', life: 3000 });
-};
-
-const findIndexById = (id) => {
-    return teams.value.findIndex((t) => t.idEquipe === id);
-};
-
-const createId = () => {
-    return Math.random().toString(36).substring(2, 9);
-};
-
-const exportCSV = () => {
-    dt.value.exportCSV();
-};
-
-const confirmDeleteSelected = () => {
-    deleteTeamsDialog.value = true;
-};
-
-const deleteSelectedTeams = () => {
-    teams.value = teams.value.filter((val) => !selectedTeams.value.includes(val));
-    // Remove all relationships for the selected teams
-    selectedTeams.value.forEach((t) => {
-        projetEquipes.value = projetEquipes.value.filter((pe) => pe.idEquipe !== t.idEquipe);
-    });
-    deleteTeamsDialog.value = false;
-    selectedTeams.value = [];
-    toast.add({ severity: 'success', summary: 'Successful', detail: 'Teams Deleted', life: 3000 });
-};
-
-// Add a project to a team
-const addProjectToTeam = (idEquipe, idProjet) => {
-    if (!idProjet) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Please select a project.', life: 3000 });
-        return;
-    }
-    if (!projetEquipes.value.some((pe) => pe.idEquipe === idEquipe && pe.idProjet === idProjet)) {
-        projetEquipes.value.push({ idEquipe, idProjet });
-        toast.add({ severity: 'success', summary: 'Successful', detail: 'Project Added to Team', life: 3000 });
-    } else {
-        toast.add({ severity: 'warn', summary: 'Warning', detail: 'Project Already in Team', life: 3000 });
-    }
-};
-
-// Remove a project from a team
-const removeProjectFromTeam = (idEquipe, idProjet) => {
-    projetEquipes.value = projetEquipes.value.filter((pe) => !(pe.idEquipe === idEquipe && pe.idProjet === idProjet));
-    toast.add({ severity: 'success', summary: 'Successful', detail: 'Project Removed from Team', life: 3000 });
-};
-
-// Get projects for a team
-const getProjectsForTeam = (idEquipe) => {
-    return projetEquipes.value.filter((pe) => pe.idEquipe === idEquipe).map((pe) => projects.value.find((p) => p.idProjet === pe.idProjet));
-};
-
-// Add 20 sample teams and projects on component mount
-onMounted(() => {
-    for (let i = 1; i <= 20; i++) {
-        teams.value.push({
-            idEquipe: createId(),
-            nom_equipe: `Team ${i}`,
-            description_equipe: `Description for Team ${i}`
-        });
-
-        projects.value.push({
-            idProjet: createId(),
-            nom_projet: `Project ${i}`,
-            description_projet: `Description for Project ${i}`,
-            date_debut_projet: '2023-01-01',
-            date_fin_projet: '2023-12-31',
-            statut_projet: i % 2 === 0 ? 'ACTIVE' : 'INACTIVE'
-        });
-    }
-
-    // Add some sample relationships
-    addProjectToTeam(teams.value[0].idEquipe, projects.value[0].idProjet);
-    addProjectToTeam(teams.value[0].idEquipe, projects.value[1].idProjet);
-    addProjectToTeam(teams.value[1].idEquipe, projects.value[0].idProjet);
-});
 </script>
 
 <template>
@@ -201,11 +337,19 @@ onMounted(() => {
                 </template>
             </Toolbar>
 
-            <!-- DataTable -->
+            <!-- Error Display -->
+            <div v-if="teamsError" class="p-mt-3 p-p-3 p-text-center" style="background: #fff6f6; color: #d32f2f">
+                <i class="pi pi-exclamation-triangle p-mr-2"></i>
+                Error loading teams.
+                <Button label="Retry" icon="pi pi-refresh" class="p-button-text p-ml-2" @click="refetch" />
+            </div>
+
+            <!-- DataTable with Loading State -->
             <DataTable
                 ref="dt"
                 v-model:selection="selectedTeams"
                 :value="teams"
+                :loading="teamsLoading"
                 dataKey="idEquipe"
                 :paginator="true"
                 :rows="10"
@@ -214,6 +358,13 @@ onMounted(() => {
                 :rowsPerPageOptions="[5, 10, 25]"
                 currentPageReportTemplate="Showing {first} to {last} of {totalRecords} teams"
             >
+                <template #loading>
+                    <div class="flex align-items-center">
+                        <ProgressSpinner style="width: 30px; height: 30px" />
+                        <span class="ml-2">Loading teams...</span>
+                    </div>
+                </template>
+
                 <template #header>
                     <div class="flex flex-wrap gap-2 align-items-center justify-content-between">
                         <h4 class="m-0">Manage Teams</h4>
@@ -240,83 +391,80 @@ onMounted(() => {
         </div>
 
         <!-- Team Dialog -->
-        <Dialog v-model:visible="teamDialog" :style="{ width: '600px' }" header="Team Details" :modal="true">
-            <div class="flex flex-col gap-6">
-                <div>
-                    <label for="nom_equipe" class="block mb-3 font-bold">Name</label>
-                    <InputText id="nom_equipe" v-model.trim="team.nom_equipe" required="true" autofocus :invalid="submitted && !team.nom_equipe" fluid />
-                    <small v-if="submitted && validateName(team.nom_equipe)" class="text-red-500">{{ validateName(team.nom_equipe) }}</small>
-                </div>
-                <div>
-                    <label for="description_equipe" class="block mb-3 font-bold">Description</label>
-                    <Textarea id="description_equipe" v-model.trim="team.description_equipe" rows="3" cols="20" fluid />
-                    <small v-if="submitted && validateDescription(team.description_equipe)" class="text-red-500">{{ validateDescription(team.description_equipe) }}</small>
+        <Dialog v-model:visible="teamDialog" :style="{ width: '600px' }" header="Team Details" :modal="true" :closable="false">
+            <div class="flex flex-col gap-4">
+                <div class="field">
+                    <label for="nom_equipe" class="font-bold block mb-2">Name *</label>
+                    <InputText id="nom_equipe" v-model.trim="team.nom_equipe" required="true" autofocus :class="{ 'p-invalid': submitted && !team.nom_equipe }" class="w-full" />
+                    <small v-if="submitted && !team.nom_equipe" class="p-error">Name is required.</small>
+                    <small v-if="submitted && team.nom_equipe && (team.nom_equipe.length < 2 || team.nom_equipe.length > 50)" class="p-error"> Name must be between 2 and 50 characters. </small>
+                    <small v-if="submitted && team.nom_equipe && !/^[A-Za-z\s]+$/.test(team.nom_equipe)" class="p-error"> Name can only contain letters and spaces. </small>
                 </div>
 
-                <!-- Projects Section -->
-                <RelationshipManager
-                    :items="projects"
-                    :selectedItem="team"
-                    :relationships="projetEquipes"
-                    :getRelatedItems="getProjectsForTeam"
-                    :addRelationship="(project) => addProjectToTeam(team.idEquipe, project.idProjet)"
-                    :removeRelationship="removeProjectFromTeam"
-                    itemLabel="Project"
-                />
+                <div class="field">
+                    <label for="description_equipe" class="font-bold block mb-2">Description *</label>
+                    <Textarea
+                        id="description_equipe"
+                        v-model.trim="team.description_equipe"
+                        rows="3"
+                        class="w-full"
+                        :class="{ 'p-invalid': submitted && (!team.description_equipe || team.description_equipe.length < 10 || team.description_equipe.length > 500) }"
+                    />
+                    <small v-if="submitted && !team.description_equipe" class="p-error">Description is required.</small>
+                    <small v-if="submitted && team.description_equipe && (team.description_equipe.length < 10 || team.description_equipe.length > 500)" class="p-error"> Description must be between 10 and 500 characters. </small>
+                </div>
             </div>
+
             <template #footer>
-                <Button label="Cancel" icon="pi pi-times" text @click="hideDialog" />
-                <Button label="Save" icon="pi pi-check" @click="saveTeam" />
+                <Button label="Cancel" icon="pi pi-times" @click="hideDialog" class="p-button-text" />
+                <Button label="Save" icon="pi pi-check" @click="saveTeam" :loading="loading" autofocus />
             </template>
         </Dialog>
 
         <!-- Delete Team Dialog -->
-        <Dialog v-model:visible="deleteTeamDialog" header="Confirm" :modal="true" :style="{ width: '450px' }">
-            <div class="flex gap-3 align-items-center">
-                <i class="text-3xl pi pi-exclamation-triangle" />
-                <span
-                    >Are you sure you want to delete <b>{{ team.nom_equipe }}</b
-                    >?</span
-                >
+        <Dialog v-model:visible="deleteTeamDialog" :style="{ width: '450px' }" header="Confirm Deletion" :modal="true" :closable="false">
+            <div class="flex align-items-center gap-3">
+                <i class="pi pi-exclamation-triangle text-3xl text-red-500" />
+                <span v-if="team">
+                    Are you sure you want to delete team <b>{{ team.nom_equipe }}</b
+                    >?
+                </span>
             </div>
+
             <template #footer>
-                <Button label="No" icon="pi pi-times" text @click="deleteTeamDialog = false" />
-                <Button label="Yes" icon="pi pi-check" severity="danger" @click="deleteTeam" />
+                <Button label="No" icon="pi pi-times" @click="deleteTeamDialog = false" class="p-button-text" />
+                <Button label="Yes" icon="pi pi-check" @click="deleteTeam" :loading="loading" class="p-button-danger" />
             </template>
         </Dialog>
 
         <!-- Delete Selected Teams Dialog -->
-        <Dialog v-model:visible="deleteTeamsDialog" header="Confirm" :modal="true" :style="{ width: '450px' }">
-            <div class="flex gap-3 align-items-center">
-                <i class="text-3xl pi pi-exclamation-triangle" />
+        <Dialog v-model:visible="deleteTeamsDialog" :style="{ width: '450px' }" header="Confirm Deletion" :modal="true" :closable="false">
+            <div class="flex align-items-center gap-3">
+                <i class="pi pi-exclamation-triangle text-3xl text-red-500" />
                 <span>Are you sure you want to delete the selected teams?</span>
             </div>
+
             <template #footer>
-                <Button label="No" icon="pi pi-times" text @click="deleteTeamsDialog = false" />
-                <Button label="Yes" icon="pi pi-check" severity="danger" @click="deleteSelectedTeams" />
+                <Button label="No" icon="pi pi-times" @click="deleteTeamsDialog = false" class="p-button-text" />
+                <Button label="Yes" icon="pi pi-check" @click="deleteSelectedTeams" :loading="loading" class="p-button-danger" />
             </template>
         </Dialog>
     </div>
 </template>
 
 <style scoped>
-.team-page {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-.card {
-    background: var(--surface-card);
-    padding: 2rem;
-    border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+.team-page .p-dialog .p-dialog-content {
+    padding: 1.5rem;
 }
 
 .field {
     margin-bottom: 1.5rem;
 }
 
-.p-fluid .field label {
-    font-weight: bold;
+.p-error {
+    display: block;
+    margin-top: 0.5rem;
+    color: #f44336;
+    font-size: 0.875rem;
 }
 </style>
