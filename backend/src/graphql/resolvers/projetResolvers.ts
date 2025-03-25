@@ -137,35 +137,37 @@ export const projetResolvers = {
     // Create a new project
     createProjet: async (
       _: any,
-      { nom_projet, description_projet, statut_projet }: {
+      { nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_projet }: {
         nom_projet: string;
         description_projet?: string;
-        statut_projet?: 'TODO' | 'IN_PROGRESS' | 'END';
+        date_debut_projet?: string;
+        date_fin_projet?: string;
+        statut_projet?: string;
       },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
         const idProjet = uuidv4();
-        const date_debut_projet = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        const statut = statut_projet || 'TODO';
 
         await pool.request()
           .input('idProjet', sql.UniqueIdentifier, idProjet)
           .input('nom_projet', sql.VarChar, nom_projet)
           .input('description_projet', sql.VarChar, description_projet || '')
-          .input('date_debut_projet', sql.DateTime, date_debut_projet)
-          .input('statut_projet', sql.VarChar, statut)
+          .input('date_debut_projet', sql.DateTime, date_debut_projet || null)
+          .input('date_fin_projet', sql.DateTime, date_fin_projet || null)
+          .input('statut_projet', sql.VarChar, statut_projet || null)
           .query(`
-            INSERT INTO Projet (idProjet, nom_projet, description_projet, date_debut_projet, statut_projet)
-            VALUES (@idProjet, @nom_projet, @description_projet, @date_debut_projet, @statut_projet);
+            INSERT INTO Projet (idProjet, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_projet)
+            VALUES (@idProjet, @nom_projet, @description_projet, @date_debut_projet, @date_fin_projet, @statut_projet);
           `);
 
         return {
           idProjet,
           nom_projet,
           description_projet,
-          date_debut_projet,
-          statut_projet: statut,
+          date_debut_projet: date_debut_projet || null,
+          date_fin_projet: date_fin_projet || null,
+          statut_projet: statut_projet || null,
         };
       } catch (error) {
         console.error('Error creating project:', error);
@@ -176,7 +178,14 @@ export const projetResolvers = {
     // Update an existing project
     updateProjet: async (
       _: any,
-      { id, nom_projet, description_projet, statut_projet }: { id: string, nom_projet: string, description_projet: string, statut_projet: string },
+      { id, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_projet }: { 
+        id: string, 
+        nom_projet: string, 
+        description_projet: string, 
+        date_debut_projet?: string, 
+        date_fin_projet?: string, 
+        statut_projet?: string 
+      },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
@@ -184,42 +193,28 @@ export const projetResolvers = {
         request.input('id', sql.UniqueIdentifier, id);
         request.input('nom_projet', sql.NVarChar, nom_projet);
         request.input('description_projet', sql.NVarChar, description_projet);
-        request.input('statut_projet', sql.NVarChar, statut_projet);
-    
-        // If status is 'Completed', set current date
-        let date_fin_projet = null;
-        if (statut_projet === 'Completed') {
-          date_fin_projet = new Date(); // Set current date (ensure this is in Date object format)
-        }
-    
-        // Prepare the dynamic query based on whether 'date_fin_projet' is null or not
-        let setQuery = `
+        request.input('date_debut_projet', sql.DateTime, date_debut_projet || null);
+        request.input('date_fin_projet', sql.DateTime, date_fin_projet || null);
+        request.input('statut_projet', sql.NVarChar, statut_projet || null);
+
+        const result = await request.query(`
+          UPDATE Projet
           SET 
             nom_projet = @nom_projet,
             description_projet = @description_projet,
+            date_debut_projet = @date_debut_projet,
+            date_fin_projet = @date_fin_projet,
             statut_projet = @statut_projet
-        `;
-        
-        if (date_fin_projet !== null) {
-          setQuery += `,
-            date_fin_projet = @date_fin_projet
-          `;
-          request.input('date_fin_projet', sql.DateTime, date_fin_projet);
-        }
-    
-        // Update query with dynamic SET clause
-        const result = await request.query(`
-          UPDATE Projet
-          ${setQuery}
           WHERE IdProjet = @id;
         `);
-    
+
         return {
           idProjet: id,
           nom_projet,
           description_projet,
-          statut_projet,
-          date_fin_projet: date_fin_projet ? date_fin_projet.toISOString() : null
+          date_debut_projet: date_debut_projet || null,
+          date_fin_projet: date_fin_projet || null,
+          statut_projet: statut_projet || null,
         };
       } catch (error) {
         console.error('Error updating project:', error);

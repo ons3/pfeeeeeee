@@ -1,31 +1,171 @@
 <script setup>
+<<<<<<< HEAD
+import { ref, watch, onMounted } from 'vue';
+=======
 import { ref, onMounted } from 'vue';
+>>>>>>> 5efdd950217d68a9ad1f459d208c68272cea1235
 import { useQuery, useMutation } from '@vue/apollo-composable';
 import { gql } from '@apollo/client/core';
 import { FilterMatchMode } from '@primevue/core/api';
 import { useToast } from 'primevue/usetoast';
-import RelationshipManager from './RelationshipManager.vue';
+import ProgressSpinner from 'primevue/progressspinner';
+import Loader from '@/components/Loader.vue'; // Import the Loader component
 
 const toast = useToast();
 const dt = ref();
+<<<<<<< HEAD
+const projects = ref([]);
+=======
 const projects = ref([]); // Will be populated from the GraphQL query
 const teams = ref([]); // List of all teams
 const projetEquipes = ref([]); // Many-to-many relationship between projects and teams
+>>>>>>> 5efdd950217d68a9ad1f459d208c68272cea1235
 const projectDialog = ref(false);
 const deleteProjectDialog = ref(false);
 const deleteProjectsDialog = ref(false);
 const project = ref({});
 const selectedProjects = ref([]);
+const submitted = ref(false);
+const loading = ref(false);
+
 const filters = ref({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS }
 });
-const submitted = ref(false);
+
 const statuses = ref([
     { label: 'TODO', value: 'todo' },
     { label: 'IN_PROGRESS', value: 'in_progress' },
     { label: 'END', value: 'end' }
 ]);
 
+<<<<<<< HEAD
+// GraphQL Queries
+const GET_PROJECTS = gql`
+    query GetProjects {
+        projets {
+            idProjet
+            nom_projet
+            description_projet
+            date_debut_projet
+            date_fin_projet
+            statut_projet
+        }
+    }
+`;
+
+const CREATE_PROJECT = gql`
+    mutation CreateProjet($nom_projet: String!, $description_projet: String, $date_debut_projet: DateTime, $date_fin_projet: DateTime, $statut_projet: String) {
+        createProjet(nom_projet: $nom_projet, description_projet: $description_projet, date_debut_projet: $date_debut_projet, date_fin_projet: $date_fin_projet, statut_projet: $statut_projet) {
+            idProjet
+            nom_projet
+            description_projet
+            date_debut_projet
+            date_fin_projet
+            statut_projet
+        }
+    }
+`;
+
+const UPDATE_PROJECT = gql`
+    mutation UpdateProjet($id: String!, $nom_projet: String, $description_projet: String, $date_debut_projet: DateTime, $date_fin_projet: DateTime, $statut_projet: String) {
+        updateProjet(id: $id, nom_projet: $nom_projet, description_projet: $description_projet, date_debut_projet: $date_debut_projet, date_fin_projet: $date_fin_projet, statut_projet: $statut_projet) {
+            idProjet
+            nom_projet
+            description_projet
+            date_debut_projet
+            date_fin_projet
+            statut_projet
+        }
+    }
+`;
+
+const DELETE_PROJECT = gql`
+    mutation DeleteProjet($id: String!) {
+        deleteProjet(id: $id) {
+            success
+            message
+        }
+    }
+`;
+
+// Queries and Mutations
+const {
+    result,
+    loading: projectsLoading,
+    error: projectsError,
+    refetch
+} = useQuery(GET_PROJECTS, null, {
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all'
+});
+
+onMounted(async () => {
+    try {
+        await refetch();
+    } catch (error) {
+        console.error('Error refetching projects:', error);
+    }
+});
+
+// For createProject
+const { mutate: createProject } = useMutation(CREATE_PROJECT, {
+    update(cache, { data: { createProjet } }) {
+        const existingData = cache.readQuery({ query: GET_PROJECTS });
+        if (existingData) {
+            cache.writeQuery({
+                query: GET_PROJECTS,
+                data: {
+                    projets: [...existingData.projets, createProjet]
+                }
+            });
+        }
+    }
+});
+
+// For updateProject
+const { mutate: updateProject } = useMutation(UPDATE_PROJECT, {
+    update(cache, { data: { updateProjet } }) {
+        const existingData = cache.readQuery({ query: GET_PROJECTS });
+        if (existingData) {
+            cache.writeQuery({
+                query: GET_PROJECTS,
+                data: {
+                    projets: existingData.projets.map((p) => (p.idProjet === updateProjet.idProjet ? updateProjet : p))
+                }
+            });
+        }
+    }
+});
+
+// For deleteProject
+const { mutate: deleteProjetMutation } = useMutation(DELETE_PROJECT);
+
+// Watch for data changes
+watch(result, (newResult) => {
+    if (newResult?.projets) {
+        projects.value = newResult.projets.map((p) => ({
+            ...p,
+            date_debut_projet: p.date_debut_projet ? new Date(p.date_debut_projet) : null,
+            date_fin_projet: p.date_fin_projet ? new Date(p.date_fin_projet) : null
+        }));
+    }
+});
+
+// Error handling
+watch(projectsError, (error) => {
+    if (error) {
+        console.error('Error loading projects:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to load projects',
+            life: 3000
+        });
+    }
+});
+
+// Project CRUD Operations
+=======
 // GraphQL Query to Fetch Projects
 const GET_PROJECTS = gql`
   query GetProjects {
@@ -64,9 +204,21 @@ onMounted(() => {
 });
 
 // Helper Functions
+>>>>>>> 5efdd950217d68a9ad1f459d208c68272cea1235
 const openNew = () => {
-    project.value = {};
+    project.value = {
+        nom_projet: '',
+        description_projet: '',
+        date_debut_projet: null,
+        date_fin_projet: null,
+        statut_projet: 'todo'
+    };
     submitted.value = false;
+    projectDialog.value = true;
+};
+
+const editProject = (proj) => {
+    project.value = { ...proj };
     projectDialog.value = true;
 };
 
@@ -75,121 +227,123 @@ const hideDialog = () => {
     submitted.value = false;
 };
 
-// Validate Name
-const validateName = (name) => {
-    if (!name || name.trim().length === 0) {
-        return 'Name is required.';
-    }
-    if (name.length < 2 || name.length > 50) {
-        return 'Name must be between 2 and 50 characters.';
-    }
-    if (!/^[A-Za-z\s]+$/.test(name)) {
-        return 'Name can only contain letters and spaces.';
-    }
-    return null;
+const formatDateForDB = (date) => {
+    if (!date) return null;
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 };
 
-// Validate Description
-const validateDescription = (description) => {
-    if (!description || description.trim().length === 0) {
-        return 'Description is required.';
-    }
-    if (description.length < 10 || description.length > 500) {
-        return 'Description must be between 10 and 500 characters.';
-    }
-    return null;
-};
-
-// Validate Date
-const validateDate = (date, isStartDate = true) => {
-    if (!date) {
-        return isStartDate ? 'Start date is required.' : 'End date is required.';
-    }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Ignore time part
-    const selectedDate = new Date(date);
-    if (selectedDate > today) {
-        return 'Date cannot be in the future.';
-    }
-    if (isStartDate && selectedDate < today) {
-        return 'Start date cannot be in the past.';
-    }
-    return null;
-};
-
-// Validate End Date
-const validateEndDate = (startDate, endDate) => {
-    if (!endDate) {
-        return 'End date is required.';
-    }
-    if (new Date(endDate) < new Date(startDate)) {
-        return 'End date must be after start date.';
-    }
-    return null;
-};
-
-const saveProject = () => {
+const saveProject = async () => {
     submitted.value = true;
 
-    // Validate Name
+    if (!validateForm()) return;
+
+    loading.value = true;
+
+    try {
+        const projectData = {
+            nom_projet: project.value.nom_projet,
+            description_projet: project.value.description_projet,
+            date_debut_projet: formatDateForDB(project.value.date_debut_projet),
+            date_fin_projet: formatDateForDB(project.value.date_fin_projet),
+            statut_projet: project.value.statut_projet
+        };
+
+        if (project.value.idProjet) {
+            await updateProject({
+                id: project.value.idProjet,
+                ...projectData
+            });
+            toast.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: 'Project updated',
+                life: 3000
+            });
+        } else {
+            await createProject(projectData);
+            toast.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: 'Project created',
+                life: 3000
+            });
+        }
+
+        await refetch();
+        projectDialog.value = false;
+        project.value = {};
+    } catch (error) {
+        console.error('Error saving project:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to save project',
+            life: 3000
+        });
+    } finally {
+        loading.value = false;
+    }
+};
+
+const formatDBDate = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0];
+};
+
+const validateForm = () => {
     const nameError = validateName(project.value.nom_projet);
-    if (nameError) {
-        toast.add({ severity: 'error', summary: 'Error', detail: nameError, life: 3000 });
-        return;
-    }
-
-    // Validate Description
     const descriptionError = validateDescription(project.value.description_projet);
-    if (descriptionError) {
-        toast.add({ severity: 'error', summary: 'Error', detail: descriptionError, life: 3000 });
-        return;
-    }
-
-    // Validate Start Date
     const startDateError = validateDate(project.value.date_debut_projet, true);
-    if (startDateError) {
-        toast.add({ severity: 'error', summary: 'Error', detail: startDateError, life: 3000 });
-        return;
-    }
+    const endDateError = validateDate(project.value.date_fin_projet, false);
+    const dateRangeError = validateEndDate(project.value.date_debut_projet, project.value.date_fin_projet);
 
-    // Validate End Date
-    const endDateError = validateEndDate(project.value.date_debut_projet, project.value.date_fin_projet);
-    if (endDateError) {
-        toast.add({ severity: 'error', summary: 'Error', detail: endDateError, life: 3000 });
-        return;
-    }
-
-    // Save Project
-    if (project.value.idProjet) {
-        const index = findIndexById(project.value.idProjet);
-        projects.value[index] = { ...project.value };
-        toast.add({ severity: 'success', summary: 'Successful', detail: 'Project Updated', life: 3000 });
-    } else {
-        project.value.idProjet = createId();
-        project.value.nom_projet = project.value.nom_projet.trim();
-        project.value.description_projet = project.value.description_projet.trim();
-        project.value.date_debut_projet = project.value.date_debut_projet;
-        project.value.date_fin_projet = project.value.date_fin_projet;
-        project.value.statut_projet = project.value.statut_projet || 'todo';
-        projects.value.push({ ...project.value });
-        toast.add({ severity: 'success', summary: 'Successful', detail: 'Project Created', life: 3000 });
-    }
-
-    projectDialog.value = false;
-    project.value = {};
+    return !(nameError || descriptionError || startDateError || endDateError || dateRangeError);
 };
 
-const editProject = (proj) => {
-    project.value = { ...proj };
-    projectDialog.value = true;
-};
-
+// Delete Operations
 const confirmDeleteProject = (proj) => {
     project.value = proj;
     deleteProjectDialog.value = true;
 };
 
 const deleteProject = async () => {
+<<<<<<< HEAD
+    try {
+        const { data } = await deleteProjetMutation({ id: project.value.idProjet });
+        if (data.deleteProjet.success) {
+            await refetch();
+            toast.add({
+                severity: 'success',
+                summary: 'Success',
+                detail: data.deleteProjet.message,
+                life: 3000
+            });
+        } else {
+            toast.add({
+                severity: 'error',
+                summary: 'Error',
+                detail: data.deleteProjet.message,
+                life: 3000
+            });
+        }
+    } catch (error) {
+        console.error('Error deleting project:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to delete project',
+            life: 3000
+        });
+    } finally {
+        deleteProjectDialog.value = false;
+        project.value = {};
+    }
+=======
   try {
     const { data } = await deleteProjetMutation({ id: project.value.idProjet });
 
@@ -226,61 +380,77 @@ const createId = () => {
 
 const exportCSV = () => {
     dt.value.exportCSV();
+>>>>>>> 5efdd950217d68a9ad1f459d208c68272cea1235
 };
 
 const confirmDeleteSelected = () => {
     deleteProjectsDialog.value = true;
 };
 
-const deleteSelectedProjects = () => {
-    projects.value = projects.value.filter((val) => !selectedProjects.value.includes(val));
-    // Remove all relationships for the selected projects
-    selectedProjects.value.forEach((proj) => {
-        projetEquipes.value = projetEquipes.value.filter((pe) => pe.idProjet !== proj.idProjet);
-    });
-    deleteProjectsDialog.value = false;
-    selectedProjects.value = [];
-    toast.add({ severity: 'success', summary: 'Successful', detail: 'Projects Deleted', life: 3000 });
+const deleteSelectedProjects = async () => {
+    try {
+        const deletePromises = selectedProjects.value.map((proj) => deleteProjetMutation({ id: proj.idProjet }));
+
+        await Promise.all(deletePromises);
+        await refetch();
+
+        toast.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Selected projects deleted',
+            life: 3000
+        });
+    } catch (error) {
+        console.error('Error deleting selected projects:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to delete selected projects',
+            life: 3000
+        });
+    } finally {
+        deleteProjectsDialog.value = false;
+        selectedProjects.value = [];
+    }
+};
+
+// Utility Functions
+const exportCSV = () => {
+    dt.value.exportCSV();
 };
 
 const getStatusLabel = (status) => {
-    switch (status) {
-        case 'todo':
-            return 'info';
-        case 'in_progress':
-            return 'warning';
-        case 'end':
-            return 'success';
-        default:
-            return 'info';
-    }
+    const statusSeverity = {
+        todo: 'warn',
+        in_progress: 'info',
+        end: 'success'
+    };
+    return statusSeverity[status] || 'info';
 };
 
-// Add a team to a project
-const addEquipeToProject = (idProjet, idEquipe) => {
-    if (!idEquipe) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Please select a team.', life: 3000 });
-        return;
-    }
-    if (!projetEquipes.value.some((pe) => pe.idProjet === idProjet && pe.idEquipe === idEquipe)) {
-        projetEquipes.value.push({ idProjet, idEquipe });
-        toast.add({ severity: 'success', summary: 'Successful', detail: 'Team Added to Project', life: 3000 });
-    } else {
-        toast.add({ severity: 'warn', summary: 'Warning', detail: 'Team Already in Project', life: 3000 });
-    }
+const validateName = (name) => {
+    if (!name) return 'Name is required';
+    if (name.length > 100) return 'Name must be less than 100 characters';
+    return null;
 };
 
-// Remove a team from a project
-const removeEquipeFromProject = (idProjet, idEquipe) => {
-    projetEquipes.value = projetEquipes.value.filter((pe) => !(pe.idProjet === idProjet && pe.idEquipe === idEquipe));
-    toast.add({ severity: 'success', summary: 'Successful', detail: 'Team Removed from Project', life: 3000 });
+const validateDescription = (description) => {
+    if (description && description.length > 500) return 'Description must be less than 500 characters';
+    return null;
 };
 
-// Get teams for a project
-const getTeamsForProject = (idProjet) => {
-    return projetEquipes.value.filter((pe) => pe.idProjet === idProjet).map((pe) => teams.value.find((t) => t.idEquipe === pe.idEquipe));
+const validateDate = (date, isStartDate) => {
+    if (!date) return isStartDate ? 'Start date is required' : 'End date is required';
+    return null;
 };
 
+<<<<<<< HEAD
+const validateEndDate = (startDate, endDate) => {
+    if (!startDate || !endDate) return null;
+    if (new Date(endDate) < new Date(startDate)) return 'End date must be after start date';
+    return null;
+};
+=======
 // Add sample teams on component mount
 onMounted(() => {
     for (let i = 1; i <= 25; i++) {
@@ -296,6 +466,7 @@ onMounted(() => {
     addEquipeToProject(projects.value[0]?.idProjet, teams.value[1].idEquipe);
     addEquipeToProject(projects.value[1]?.idProjet, teams.value[0].idEquipe);
 });
+>>>>>>> 5efdd950217d68a9ad1f459d208c68272cea1235
 </script>
 
 <template>
@@ -312,11 +483,19 @@ onMounted(() => {
                 </template>
             </Toolbar>
 
-            <!-- DataTable -->
+            <!-- Error Display -->
+            <div v-if="projectsError" class="p-mt-3 p-p-3 p-text-center" style="background: #fff6f6; color: #d32f2f">
+                <i class="pi pi-exclamation-triangle p-mr-2"></i>
+                Error loading projects.
+                <Button label="Retry" icon="pi pi-refresh" class="p-button-text p-ml-2" @click="refetch" />
+            </div>
+
+            <!-- DataTable with Loading State -->
             <DataTable
                 ref="dt"
                 v-model:selection="selectedProjects"
                 :value="projects"
+                :loading="projectsLoading"
                 dataKey="idProjet"
                 :paginator="true"
                 :rows="10"
@@ -325,6 +504,13 @@ onMounted(() => {
                 :rowsPerPageOptions="[5, 10, 25]"
                 currentPageReportTemplate="Showing {first} to {last} of {totalRecords} projects"
             >
+                <template #loading>
+                    <div class="flex align-items-center">
+                        <ProgressSpinner style="width: 30px; height: 30px" />
+                        <span class="ml-2">Loading projects...</span>
+                    </div>
+                </template>
+
                 <template #header>
                     <div class="flex flex-wrap gap-2 align-items-center justify-content-between">
                         <h4 class="m-0">Manage Projects</h4>
@@ -343,17 +529,17 @@ onMounted(() => {
                 <Column field="description_projet" header="Description" sortable></Column>
                 <Column field="date_debut_projet" header="Start Date" sortable>
                     <template #body="{ data }">
-                        {{ new Date(data.date_debut_projet).toLocaleDateString() }}
+                        {{ formatDBDate(data.date_debut_projet) }}
                     </template>
                 </Column>
                 <Column field="date_fin_projet" header="End Date" sortable>
                     <template #body="{ data }">
-                        {{ new Date(data.date_fin_projet).toLocaleDateString() }}
+                        {{ formatDBDate(data.date_fin_projet) }}
                     </template>
                 </Column>
                 <Column field="statut_projet" header="Status" sortable>
                     <template #body="{ data }">
-                        <Tag :value="data.statut_projet.toUpperCase()" :severity="getStatusLabel(data.statut_projet)" />
+                        <Tag :value="data.statut_projet?.toUpperCase()" :severity="getStatusLabel(data.statut_projet)" />
                     </template>
                 </Column>
                 <Column header="Actions" headerStyle="width: 10rem">
@@ -366,105 +552,99 @@ onMounted(() => {
         </div>
 
         <!-- Project Dialog -->
-        <Dialog v-model:visible="projectDialog" :style="{ width: '600px' }" header="Project Details" :modal="true">
-            <div class="flex flex-col gap-6">
-                <div>
-                    <label for="nom_projet" class="block mb-3 font-bold">Name</label>
-                    <InputText id="nom_projet" v-model.trim="project.nom_projet" required="true" autofocus :invalid="submitted && !project.nom_projet" fluid />
-                    <small v-if="submitted && validateName(project.nom_projet)" class="text-red-500">{{ validateName(project.nom_projet) }}</small>
+        <Dialog v-model:visible="projectDialog" :style="{ width: '600px' }" header="Project Details" :modal="true" :closable="false">
+            <div class="flex flex-col gap-4">
+                <div class="field">
+                    <label for="nom_projet" class="font-bold block mb-2">Name *</label>
+                    <InputText id="nom_projet" v-model.trim="project.nom_projet" required="true" autofocus :class="{ 'p-invalid': submitted && !project.nom_projet }" class="w-full" />
+                    <small v-if="submitted && !project.nom_projet" class="p-error">Name is required.</small>
+                    <small v-if="submitted && project.nom_projet && project.nom_projet.length > 100" class="p-error">Name must be less than 100 characters.</small>
                 </div>
-                <div>
-                    <label for="description_projet" class="block mb-3 font-bold">Description</label>
-                    <Textarea id="description_projet" v-model.trim="project.description_projet" rows="3" cols="20" fluid />
-                    <small v-if="submitted && validateDescription(project.description_projet)" class="text-red-500">{{ validateDescription(project.description_projet) }}</small>
+
+                <div class="field">
+                    <label for="description_projet" class="font-bold block mb-2">Description</label>
+                    <Textarea id="description_projet" v-model.trim="project.description_projet" rows="3" class="w-full" :class="{ 'p-invalid': submitted && project.description_projet && project.description_projet.length > 500 }" />
+                    <small v-if="submitted && project.description_projet && project.description_projet.length > 500" class="p-error"> Description must be less than 500 characters. </small>
                 </div>
-                <div>
-                    <label for="date_debut_projet" class="block mb-3 font-bold">Start Date</label>
-                    <Calendar id="date_debut_projet" v-model="project.date_debut_projet" :showIcon="true" dateFormat="yy-mm-dd" placeholder="Select a Start Date" class="w-full" />
-                    <small v-if="submitted && validateDate(project.date_debut_projet, true)" class="text-red-500">{{ validateDate(project.date_debut_projet, true) }}</small>
+
+                <div class="field">
+                    <label for="date_debut_projet" class="font-bold block mb-2">Start Date *</label>
+                    <Calendar id="date_debut_projet" v-model="project.date_debut_projet" :showIcon="true" dateFormat="yy-mm-dd" placeholder="Select a Start Date" class="w-full" :class="{ 'p-invalid': submitted && !project.date_debut_projet }" />
+                    <small v-if="submitted && !project.date_debut_projet" class="p-error">Start date is required.</small>
                 </div>
-                <div>
-                    <label for="date_fin_projet" class="block mb-3 font-bold">End Date</label>
+
+                <div class="field">
+                    <label for="date_fin_projet" class="font-bold block mb-2">End Date *</label>
                     <Calendar
                         id="date_fin_projet"
                         v-model="project.date_fin_projet"
                         :showIcon="true"
                         dateFormat="yy-mm-dd"
                         placeholder="Select an End Date"
-                        :minDate="project.date_debut_projet ? new Date(project.date_debut_projet) : null"
+                        :minDate="project.date_debut_projet"
                         class="w-full"
+                        :class="{ 'p-invalid': submitted && !project.date_fin_projet }"
                     />
-                    <small v-if="submitted && validateEndDate(project.date_debut_projet, project.date_fin_projet)" class="text-red-500">{{ validateEndDate(project.date_debut_projet, project.date_fin_projet) }}</small>
-                </div>
-                <div>
-                    <label for="statut_projet" class="block mb-3 font-bold">Status</label>
-                    <Select id="statut_projet" v-model="project.statut_projet" :options="statuses" optionLabel="label" placeholder="Select a Status" fluid />
+                    <small v-if="submitted && !project.date_fin_projet" class="p-error">End date is required.</small>
+                    <small v-if="project.date_debut_projet && project.date_fin_projet && new Date(project.date_fin_projet) < new Date(project.date_debut_projet)" class="p-error">End date must be after start date.</small>
                 </div>
 
-                <!-- Teams Section -->
-                <RelationshipManager
-                    :items="teams"
-                    :selectedItem="project"
-                    :relationships="projetEquipes"
-                    :getRelatedItems="getTeamsForProject"
-                    :addRelationship="(team) => addEquipeToProject(project.idProjet, team.idEquipe)"
-                    :removeRelationship="removeEquipeFromProject"
-                    itemLabel="Team"
-                />
+                <div class="field">
+                    <label for="statut_projet" class="font-bold block mb-2">Status</label>
+                    <Dropdown id="statut_projet" v-model="project.statut_projet" :options="statuses" optionLabel="label" optionValue="value" placeholder="Select a Status" class="w-full" />
+                </div>
             </div>
+
             <template #footer>
-                <Button label="Cancel" icon="pi pi-times" text @click="hideDialog" />
-                <Button label="Save" icon="pi pi-check" @click="saveProject" />
+                <Button label="Cancel" icon="pi pi-times" @click="hideDialog" class="p-button-text" />
+                <Button label="Save" icon="pi pi-check" @click="saveProject" :loading="loading" autofocus />
             </template>
         </Dialog>
 
         <!-- Delete Project Dialog -->
-        <Dialog v-model:visible="deleteProjectDialog" header="Confirm" :modal="true" :style="{ width: '450px' }">
-            <div class="flex gap-3 align-items-center">
-                <i class="text-3xl pi pi-exclamation-triangle" />
-                <span
-                    >Are you sure you want to delete <b>{{ project.nom_projet }}</b
-                    >?</span
-                >
+        <Dialog v-model:visible="deleteProjectDialog" :style="{ width: '450px' }" header="Confirm Deletion" :modal="true" :closable="false">
+            <div class="flex align-items-center gap-3">
+                <i class="pi pi-exclamation-triangle text-3xl text-red-500" />
+                <span v-if="project">
+                    Are you sure you want to delete project <b>{{ project.nom_projet }}</b
+                    >?
+                </span>
             </div>
+
             <template #footer>
-                <Button label="No" icon="pi pi-times" text @click="deleteProjectDialog = false" />
-                <Button label="Yes" icon="pi pi-check" severity="danger" @click="deleteProject" />
+                <Button label="No" icon="pi pi-times" @click="deleteProjectDialog = false" class="p-button-text" />
+                <Button label="Yes" icon="pi pi-check" @click="deleteProject" :loading="loading" class="p-button-danger" />
             </template>
         </Dialog>
 
         <!-- Delete Selected Projects Dialog -->
-        <Dialog v-model:visible="deleteProjectsDialog" header="Confirm" :modal="true" :style="{ width: '450px' }">
-            <div class="flex gap-3 align-items-center">
-                <i class="text-3xl pi pi-exclamation-triangle" />
+        <Dialog v-model:visible="deleteProjectsDialog" :style="{ width: '450px' }" header="Confirm Deletion" :modal="true" :closable="false">
+            <div class="flex align-items-center gap-3">
+                <i class="pi pi-exclamation-triangle text-3xl text-red-500" />
                 <span>Are you sure you want to delete the selected projects?</span>
             </div>
+
             <template #footer>
-                <Button label="No" icon="pi pi-times" text @click="deleteProjectsDialog = false" />
-                <Button label="Yes" icon="pi pi-check" severity="danger" @click="deleteSelectedProjects" />
+                <Button label="No" icon="pi pi-times" @click="deleteProjectsDialog = false" class="p-button-text" />
+                <Button label="Yes" icon="pi pi-check" @click="deleteSelectedProjects" :loading="loading" class="p-button-danger" />
             </template>
         </Dialog>
     </div>
 </template>
 
 <style scoped>
-.project-page {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-.card {
-    background: var(--surface-card);
-    padding: 2rem;
-    border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+.project-page .p-dialog .p-dialog-content {
+    padding: 1.5rem;
 }
 
 .field {
     margin-bottom: 1.5rem;
 }
 
-.p-fluid .field label {
-    font-weight: bold;
+.p-error {
+    display: block;
+    margin-top: 0.5rem;
+    color: #f44336;
+    font-size: 0.875rem;
 }
 </style>
