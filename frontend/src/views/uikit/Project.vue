@@ -1,9 +1,5 @@
 <script setup>
-<<<<<<< HEAD
 import { ref, watch, onMounted } from 'vue';
-=======
-import { ref, onMounted } from 'vue';
->>>>>>> 5efdd950217d68a9ad1f459d208c68272cea1235
 import { useQuery, useMutation } from '@vue/apollo-composable';
 import { gql } from '@apollo/client/core';
 import { FilterMatchMode } from '@primevue/core/api';
@@ -13,13 +9,7 @@ import Loader from '@/components/Loader.vue'; // Import the Loader component
 
 const toast = useToast();
 const dt = ref();
-<<<<<<< HEAD
 const projects = ref([]);
-=======
-const projects = ref([]); // Will be populated from the GraphQL query
-const teams = ref([]); // List of all teams
-const projetEquipes = ref([]); // Many-to-many relationship between projects and teams
->>>>>>> 5efdd950217d68a9ad1f459d208c68272cea1235
 const projectDialog = ref(false);
 const deleteProjectDialog = ref(false);
 const deleteProjectsDialog = ref(false);
@@ -38,7 +28,6 @@ const statuses = ref([
     { label: 'END', value: 'end' }
 ]);
 
-<<<<<<< HEAD
 // GraphQL Queries
 const GET_PROJECTS = gql`
     query GetProjects {
@@ -165,46 +154,6 @@ watch(projectsError, (error) => {
 });
 
 // Project CRUD Operations
-=======
-// GraphQL Query to Fetch Projects
-const GET_PROJECTS = gql`
-  query GetProjects {
-    projets {
-      idProjet
-      nom_projet
-      description_projet
-      date_debut_projet
-      date_fin_projet
-      statut_projet
-    }
-  }
-`;
-
-// GraphQL Mutation to Delete a Project
-const DELETE_PROJECT = gql`
-  mutation DeleteProjet($id: String!) {
-    deleteProjet(id: $id) {
-      success
-      message
-    }
-  }
-`;
-
-// Use Apollo Client to Fetch Projects
-const { result, loading, error } = useQuery(GET_PROJECTS);
-
-// Use Apollo Client to Delete a Project
-const { mutate: deleteProjetMutation } = useMutation(DELETE_PROJECT);
-
-// Watch for changes in the result and update the projects ref
-onMounted(() => {
-  if (result.value) {
-    projects.value = result.value.projets;
-  }
-});
-
-// Helper Functions
->>>>>>> 5efdd950217d68a9ad1f459d208c68272cea1235
 const openNew = () => {
     project.value = {
         nom_projet: '',
@@ -312,7 +261,6 @@ const confirmDeleteProject = (proj) => {
 };
 
 const deleteProject = async () => {
-<<<<<<< HEAD
     try {
         const { data } = await deleteProjetMutation({ id: project.value.idProjet });
         if (data.deleteProjet.success) {
@@ -343,44 +291,6 @@ const deleteProject = async () => {
         deleteProjectDialog.value = false;
         project.value = {};
     }
-=======
-  try {
-    const { data } = await deleteProjetMutation({ id: project.value.idProjet });
-
-    if (data.deleteProjet.success) {
-      // Remove the project from the local state
-      projects.value = projects.value.filter((val) => val.idProjet !== project.value.idProjet);
-      // Remove all relationships for this project
-      projetEquipes.value = projetEquipes.value.filter((pe) => pe.idProjet !== project.value.idProjet);
-
-      // Show success message
-      toast.add({ severity: 'success', summary: 'Successful', detail: data.deleteProjet.message, life: 3000 });
-    } else {
-      // Show error message if deletion was not successful
-      toast.add({ severity: 'error', summary: 'Error', detail: data.deleteProjet.message, life: 3000 });
-    }
-  } catch (error) {
-    // Handle any errors
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete project.', life: 3000 });
-    console.error('Error deleting project:', error);
-  } finally {
-    // Close the delete confirmation dialog
-    deleteProjectDialog.value = false;
-    project.value = {};
-  }
-};
-
-const findIndexById = (id) => {
-    return projects.value.findIndex((proj) => proj.idProjet === id);
-};
-
-const createId = () => {
-    return Math.random().toString(36).substring(2, 9);
-};
-
-const exportCSV = () => {
-    dt.value.exportCSV();
->>>>>>> 5efdd950217d68a9ad1f459d208c68272cea1235
 };
 
 const confirmDeleteSelected = () => {
@@ -444,29 +354,11 @@ const validateDate = (date, isStartDate) => {
     return null;
 };
 
-<<<<<<< HEAD
 const validateEndDate = (startDate, endDate) => {
     if (!startDate || !endDate) return null;
     if (new Date(endDate) < new Date(startDate)) return 'End date must be after start date';
     return null;
 };
-=======
-// Add sample teams on component mount
-onMounted(() => {
-    for (let i = 1; i <= 25; i++) {
-        teams.value.push({
-            idEquipe: createId(),
-            nom_equipe: `Team ${i}`,
-            description_equipe: `Description for Team ${i}`
-        });
-    }
-
-    // Add some sample relationships
-    addEquipeToProject(projects.value[0]?.idProjet, teams.value[0].idEquipe);
-    addEquipeToProject(projects.value[0]?.idProjet, teams.value[1].idEquipe);
-    addEquipeToProject(projects.value[1]?.idProjet, teams.value[0].idEquipe);
-});
->>>>>>> 5efdd950217d68a9ad1f459d208c68272cea1235
 </script>
 
 <template>
