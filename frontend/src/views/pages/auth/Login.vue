@@ -1,4 +1,3 @@
-
 <script setup>
 import FloatingConfigurator from '@/components/FloatingConfigurator.vue';
 import { ref, onMounted } from 'vue';
@@ -26,24 +25,33 @@ const handleGoogleLogin = (response) => {
 
 // Initialize Google Sign-In on component mount
 onMounted(() => {
-  window.google.accounts.id.initialize({
-    client_id: 'YOUR_GOOGLE_CLIENT_ID', // Replace with your Google Client ID
-    callback: handleGoogleLogin, // Callback function to handle the login response
-  });
+  // Add Google Sign-In script dynamically
+  const script = document.createElement('script');
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.async = true;
+  script.defer = true;
+  document.head.appendChild(script);
 
-  // Render the Google Sign-In button
-  window.google.accounts.id.renderButton(
-    document.getElementById('google-signin-button'),
-    {
-      theme: 'outline',       // Button theme: outline, filled_blue, or filled_black
-      size: 'large',          // Button size: small, medium, or large
-      text: 'continue_with',  // Button text: signin_with or continue_with
-      shape: 'rectangular',   // Button shape: rectangular, pill, circle, or square
-    }
-  );
+  script.onload = () => {
+    window.google.accounts.id.initialize({
+      client_id: 'YOUR_GOOGLE_CLIENT_ID', // Replace with your Google Client ID
+      callback: handleGoogleLogin, // Callback function to handle the login response
+    });
 
-  // Optionally prompt the user to sign in automatically
-  window.google.accounts.id.prompt();
+    // Render the Google Sign-In button
+    window.google.accounts.id.renderButton(
+      document.getElementById('google-signin-button'),
+      {
+        theme: 'outline',       // Button theme: outline, filled_blue, or filled_black
+        size: 'large',          // Button size: small, medium, or large
+        text: 'continue_with',  // Button text: signin_with or continue_with
+        shape: 'rectangular',   // Button shape: rectangular, pill, circle, or square
+      }
+    );
+
+    // Optionally prompt the user to sign in automatically
+    window.google.accounts.id.prompt();
+  };
 });
 </script>
 
@@ -57,8 +65,18 @@ onMounted(() => {
             <svg viewBox="0 0 54 40" fill="none" xmlns="http://www.w3.org/2000/svg" class="mb-8 w-16 shrink-0 mx-auto">
               <!-- Your SVG logo here -->
             </svg>
-            <div class="text-surface-900 dark:text-surface-0 text-3xl font-medium mb-4">Welcome to PrimeLand!</div>
-            <span class="text-muted-color font-medium">Sign in to continue</span>
+            <div class="text-surface-900 dark:text-surface-0 text-3xl font-medium mb-4">Welcome to </div>
+            <img src="/logo2.png" alt="Logo" 
+            class="w-32 mx-auto" />
+          </div>
+
+          <!-- Google Sign-In Button at the Top -->
+          <div id="google-signin-button" class="w-full flex justify-center mb-6"></div>
+          <!-- Divider -->
+          <div class="flex items-center my-6">
+            <div class="flex-1 border-t border-surface-300"></div>
+            <span class="mx-4 text-surface-500">OR</span>
+            <div class="flex-1 border-t border-surface-300"></div>
           </div>
 
           <!-- Email and Password Login -->
@@ -74,38 +92,12 @@ onMounted(() => {
                 <Checkbox v-model="checked" id="rememberme1" binary class="mr-2"></Checkbox>
                 <label for="rememberme1">Remember me</label>
               </div>
-              <span class="font-medium no-underline ml-2 text-right cursor-pointer text-primary">Forgot password?</span>
             </div>
             <Button label="Sign In" class="w-full" as="router-link" to="/app/Dashboard"></Button>
           </div>
-
-          <!-- Divider -->
-          <div class="flex items-center my-6">
-            <div class="flex-1 border-t border-surface-300"></div>
-            <span class="mx-4 text-surface-500">OR</span>
-            <div class="flex-1 border-t border-surface-300"></div>
-          </div>
-
-          <!-- Google Sign-In Button -->
-          <div id="google-signin-button" class="w-full flex justify-center"></div>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<style scoped>
-.pi-eye {
-  transform: scale(1.6);
-  margin-right: 1rem;
-}
-
-.pi-eye-slash {
-  transform: scale(1.6);
-  margin-right: 1rem;
-}
-
-#google-signin-button {
-  margin-top: 1rem;
-}
-</style>

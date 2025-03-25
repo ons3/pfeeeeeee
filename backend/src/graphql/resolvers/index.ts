@@ -2,14 +2,10 @@ import { projetResolvers } from "./projetResolvers";
 import { equipeResolvers } from "./equipeResolvers";
 import { projetEquipeSchema } from "./projetEquipeSchema";
 import { tacheResolvers } from "./tacheResolvers";
-import { adminResolvers } from "./administrateurResolvers";
+import { adminResolvers } from "./administrateurResolvers"; // Vérifie la casse
 import { alertResolvers } from "./alertResolvers";
 import { suiviDeTempsResolvers } from "./suiviDeTempsResolvers";
 import { employeeResolvers } from "./employeeResolvers";
-
-
-
-
 
 export const resolvers = {
   Query: {
@@ -20,7 +16,6 @@ export const resolvers = {
     ...alertResolvers.Query,
     ...suiviDeTempsResolvers.Query,
     ...employeeResolvers.Query,
-
   },
   Mutation: {
     ...projetResolvers.Mutation,
@@ -30,6 +25,6 @@ export const resolvers = {
     ...adminResolvers.Mutation,
     ...alertResolvers.Mutation,
     ...suiviDeTempsResolvers.Mutation,
-    ...employeeResolvers.Mutation
+    ...employeeResolvers.Mutation,
   },
 };
