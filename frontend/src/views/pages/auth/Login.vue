@@ -2,30 +2,90 @@
 import FloatingConfigurator from '@/components/FloatingConfigurator.vue';
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const email = ref('');
 const password = ref('');
 const checked = ref(false);
 const router = useRouter();
+const errorMessage = ref('');
+
+// API Base URL
+const API_URL = 'http://localhost:3000/graphql'; // Change to your actual backend URL
+
+// Handle Manual Login
+const login = async () => {
+  try {
+    const response = await axios.post(API_URL, {
+      query: `
+        mutation {
+          loginAdministrateur(email_administrateur: "${email.value}", password_administrateur: "${password.value}") {
+            success
+            message
+            token
+            administrateur {
+              idAdministrateur
+              nom_administrateur
+              email_administrateur
+            }
+          }
+        }
+      `,
+    });
+
+    const { success, message, token, administrateur } = response.data.data.loginAdministrateur;
+
+    if (success) {
+      // Store token and administrateur details in localStorage
+      localStorage.setItem('token', token); // Save token
+      localStorage.setItem('administrateur', JSON.stringify(administrateur)); // Save administrateur details
+      //console.log('Administrateur:', administrateur);
+      // Redirect to Dashboard
+      router.push({ name: 'Dashboard' });
+    } else {
+      errorMessage.value = message; // Show error message
+    }
+  } catch (error) {
+    errorMessage.value = 'Login failed. Please try again.';
+    console.error(error);
+  }
+};
+
 
 // Handle Google Login
-const handleGoogleLogin = (response) => {
+const handleGoogleLogin = async (response) => {
   console.log('Google Login Response:', response);
 
-  // Decode the JWT token to get user info
-  const userInfo = JSON.parse(atob(response.credential.split('.')[1]));
-  console.log('User Info:', userInfo);
+  try {
+    const googleToken = response.credential;
+    const gqlResponse = await axios.post(API_URL, {
+      query: `
+        mutation {
+          loginWithGoogle(googleIdToken: "${googleToken}") {
+            success
+            message
+            token
+          }
+        }
+      `,
+    });
 
-  // Save user info to localStorage (or to a Vuex store, etc.)
-  localStorage.setItem('user', JSON.stringify(userInfo));
+    const { success, message, token } = gqlResponse.data.data.loginWithGoogle;
 
-  // Redirect to the dashboard
-  router.push({ name: 'dashboard' });
+    if (success) {
+      localStorage.setItem('token', token);
+      router.push({ name: 'Dashboard' });
+    } else {
+      errorMessage.value = message;
+    }
+  } catch (error) {
+    errorMessage.value = 'Google login failed.';
+    console.error(error);
+  }
 };
 
 // Initialize Google Sign-In on component mount
 onMounted(() => {
-  // Add Google Sign-In script dynamically
   const script = document.createElement('script');
   script.src = 'https://accounts.google.com/gsi/client';
   script.async = true;
@@ -35,21 +95,19 @@ onMounted(() => {
   script.onload = () => {
     window.google.accounts.id.initialize({
       client_id: 'YOUR_GOOGLE_CLIENT_ID', // Replace with your Google Client ID
-      callback: handleGoogleLogin, // Callback function to handle the login response
+      callback: handleGoogleLogin,
     });
 
-    // Render the Google Sign-In button
     window.google.accounts.id.renderButton(
       document.getElementById('google-signin-button'),
       {
-        theme: 'outline',       // Button theme: outline, filled_blue, or filled_black
-        size: 'large',          // Button size: small, medium, or large
-        text: 'continue_with',  // Button text: signin_with or continue_with
-        shape: 'rectangular',   // Button shape: rectangular, pill, circle, or square
+        theme: 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'rectangular',
       }
     );
 
-    // Optionally prompt the user to sign in automatically
     window.google.accounts.id.prompt();
   };
 });
@@ -62,16 +120,12 @@ onMounted(() => {
       <div style="border-radius: 56px; padding: 0.3rem; background: linear-gradient(180deg, var(--primary-color) 10%, rgba(33, 150, 243, 0) 30%)">
         <div class="w-full bg-surface-0 dark:bg-surface-900 py-20 px-8 sm:px-20" style="border-radius: 53px">
           <div class="text-center mb-8">
-            <svg viewBox="0 0 54 40" fill="none" xmlns="http://www.w3.org/2000/svg" class="mb-8 w-16 shrink-0 mx-auto">
-              <!-- Your SVG logo here -->
-            </svg>
-            <div class="text-surface-900 dark:text-surface-0 text-3xl font-medium mb-4">Welcome to </div>
-            <img src="/logo2.png" alt="Logo" 
-            class="w-32 mx-auto" />
+            <img src="/logo2.png" alt="Logo" class="w-32 mx-auto" />
           </div>
 
-          <!-- Google Sign-In Button at the Top -->
+          <!-- Google Sign-In Button -->
           <div id="google-signin-button" class="w-full flex justify-center mb-6"></div>
+
           <!-- Divider -->
           <div class="flex items-center my-6">
             <div class="flex-1 border-t border-surface-300"></div>
@@ -93,7 +147,9 @@ onMounted(() => {
                 <label for="rememberme1">Remember me</label>
               </div>
             </div>
-            <Button label="Sign In" class="w-full" as="router-link" to="/app/Dashboard"></Button>
+
+            <Button label="Sign In" class="w-full" @click="login"></Button>
+            <p v-if="errorMessage" class="text-red-500 mt-2">{{ errorMessage }}</p>
           </div>
         </div>
       </div>
@@ -101,3 +157,8 @@ onMounted(() => {
   </div>
 </template>
 
+<style scoped>
+#google-signin-button {
+  margin-top: 1rem;
+}
+</style>

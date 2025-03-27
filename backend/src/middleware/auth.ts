@@ -2,29 +2,28 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
 export const authMiddleware = async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
-  // Récupérer le token depuis l'en-tête Authorization
-  const token = req.headers.authorization || '';
+  const token = req.cookies?.adminToken || req.headers.authorization;
 
   if (token) {
     try {
-      // Vérifier le token JWT
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret_change_this_in_production');
-      req.user = decoded; // Attacher l'utilisateur décodé à la requête
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!);
+      req.user = decoded;
     } catch (error) {
-      console.log('Token non valide');
+      console.log('Invalid Token');
     }
   }
-  next(); // Continuer avec la requête
+  next();
 };
 
-// Interface pour le contexte Apollo
-interface ApolloContextParams {
-  req: Request & { user?: any };
-}
-
-// Fonction pour créer le contexte Apollo
-export const createApolloContext = ({ req }: ApolloContextParams) => {
-  return {
-    user: req.user // L'utilisateur est disponible dans le contexte
-  };
+export const createApolloContext = ({ req }: { req: Request }) => {
+  let user = null;
+  const token = req.cookies?.adminToken || req.headers.authorization;
+  if (token) {
+    try {
+      user = jwt.verify(token, process.env.JWT_SECRET!);
+    } catch (error) {
+      console.log('Invalid Token:', error);
+    }
+  }
+  return { user };
 };

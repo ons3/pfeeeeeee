@@ -1,7 +1,7 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 
-// Your personal profile data - replace with your actual information
+// Reactive state for profile data
 const profile = ref({
   name: 'Votre Nom Complet',
   username: '@votre_pseudo',
@@ -50,12 +50,25 @@ const isContactModalOpen = ref(false)
 const toggleContactModal = () => {
   isContactModalOpen.value = !isContactModalOpen.value
 }
+
+// On mounted, retrieve the administrateur data from localStorage
+onMounted(() => {
+  const administrateur = JSON.parse(localStorage.getItem('administrateur'))
+
+  if (administrateur) {
+    // Update profile data based on the administrateur object from localStorage
+    profile.value.name = administrateur.nom_administrateur
+    profile.value.email = administrateur.email_administrateur
+    profile.value.id = administrateur.idAdministrateur
+    // You can add more fields based on your needs, e.g., profile.value.username
+  }
+})
 </script>
 
 <template>
   <div class="personal-profile-container">
     <!-- Cover Image -->
-    
+
 
     <!-- Profile Header -->
     <div class="profile-header">
@@ -64,9 +77,9 @@ const toggleContactModal = () => {
       </div>
       <div class="profile-info">
         <h1 class="profile-name">{{ profile.name }}</h1>
-        <p class="profile-username">{{ profile.username }}</p>
-        <p class="profile-bio">{{ profile.bio }}</p>
-        
+        <p class="profile-email">{{ profile.email }}</p>
+        <p class="profile-bio">{{ profile.id}}</p>
+
         <div class="profile-details">
           <p><strong>📍 Localisation:</strong> Tunisie</p>
           <p><strong>💼 Profession:</strong> {{ profile.occupation }}</p>
