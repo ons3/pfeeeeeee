@@ -1,16 +1,19 @@
 import { gql } from '@apollo/client/core';
 
 export const ADD_TEAM_TO_PROJECT = gql`
-  mutation AddEquipeToProject($idProjet: String!, $idEquipe: String!) {
+  mutation AddTeamToProject($idProjet: String!, $idEquipe: String!) {
     addEquipeToProject(idProjet: $idProjet, idEquipe: $idEquipe) {
-      idProjet
-      idEquipe
+      success
+      message
     }
   }
 `;
 
 export const REMOVE_TEAM_FROM_PROJECT = gql`
-  mutation RemoveEquipeFromProject($idProjet: String!, $idEquipe: String!) {
-    removeEquipeFromProject(idProjet: $idProjet, idEquipe: $idEquipe)
+  mutation RemoveTeamFromProject($idProjet: String!, $idEquipe: String!) {
+    removeEquipeFromProject(idProjet: $idProjet, idEquipe: $idEquipe) {
+      success
+      message
+    }
   }
 `;
