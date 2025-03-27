@@ -23,7 +23,7 @@ const selectedTeam = ref(null);
 const teamToRemove = ref({ id: null, name: '' });
 const addingTeam = ref(false);
 const removingTeam = ref(false);
-const dropdownKey = ref(0); // Key to force dropdown re-render
+const dropdownKey = ref(0);
 
 const filters = ref({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS }
@@ -96,6 +96,47 @@ const { mutate: updateProject } = useMutation(UPDATE_PROJECT, {
 
 const { mutate: deleteProjetMutation } = useMutation(DELETE_PROJECT);
 
+// Date handling functions
+const formatDBDate = (dateString) => {
+  if (!dateString) return '-';
+  
+  // Handle both Date objects and string inputs
+  const date = dateString instanceof Date ? dateString : new Date(dateString);
+  
+  // Check if date is valid
+  if (isNaN(date.getTime())) return '-';
+  
+  // Format as local date (YYYY-MM-DD)
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateForDB = (date) => {
+  if (!date) return null;
+  
+  if (date instanceof Date) {
+    // Get the local date components (ignoring timezone)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date;
+  }
+  
+  return null;
+};
+
+const handleDateSelect = (event, field) => {
+  const selectedDate = new Date(event);
+  selectedDate.setHours(12, 0, 0, 0); // Set to noon to avoid timezone issues
+  project.value[field] = selectedDate;
+};
 
 // Watchers
 watch(projectsResult, (newResult) => {
@@ -104,7 +145,7 @@ watch(projectsResult, (newResult) => {
             ...p,
             date_debut_projet: p.date_debut_projet ? new Date(p.date_debut_projet) : null,
             date_fin_projet: p.date_fin_projet ? new Date(p.date_fin_projet) : null,
-            equipes: p.equipes || [] // Ensure equipes is always an array
+            equipes: p.equipes || []
         }));
     }
 });
@@ -112,7 +153,7 @@ watch(projectsResult, (newResult) => {
 watch(teamsResult, (newResult) => {
     if (newResult?.equipes) {
         teams.value = newResult.equipes;
-        dropdownKey.value++; // Force dropdown refresh when teams update
+        dropdownKey.value++;
     }
 });
 
@@ -154,15 +195,14 @@ const openNew = () => {
 const editProject = async (proj) => {
     project.value = {
         ...proj,
-        equipes: proj.equipes || [] // Ensure equipes is always an array
+        equipes: proj.equipes || []
     };
     projectDialog.value = true;
 
-    // Force refresh teams and dropdown when opening dialog
     try {
         await refetchTeams();
         dropdownKey.value++;
-        await nextTick(); // Wait for the DOM to update
+        await nextTick();
     } catch (error) {
         console.error('Error refreshing teams:', error);
     }
@@ -172,18 +212,6 @@ const hideDialog = () => {
     projectDialog.value = false;
     submitted.value = false;
     selectedTeam.value = null;
-};
-
-const formatDateForDB = (date) => {
-    if (!date) return null;
-    const d = new Date(date);
-    return d.toISOString().split('T')[0];
-};
-
-const formatDBDate = (dateString) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toISOString().split('T')[0];
 };
 
 const saveProject = async () => {
@@ -237,7 +265,6 @@ const saveProject = async () => {
         loading.value = false;
     }
 };
-
 const confirmDeleteProject = (proj) => {
     project.value = proj;
     deleteProjectDialog.value = true;
@@ -589,14 +616,14 @@ const handleRemoveTeam = async (teamId) => {
                     <div class="field">
                         <label for="date_debut_projet" class="font-bold block mb-2">Start Date *</label>
                         <Calendar
-                            id="date_debut_projet"
-                            v-model="project.date_debut_projet"
-                            :showIcon="true"
-                            dateFormat="yy-mm-dd"
-                            placeholder="Select a Start Date"
-                            class="w-full"
-                            :class="{ 'p-invalid': submitted && validateDate(project.date_debut_projet, true) }"
-                        />
+        id="date_debut_projet"
+        v-model="project.date_debut_projet"
+        :showIcon="true"
+        dateFormat="yy-mm-dd"
+        placeholder="Select a Start Date"
+        class="w-full"
+        @date-select="handleDateSelect($event, 'date_debut_projet')"
+    />
                         <small v-if="submitted && validateDate(project.date_debut_projet, true)" class="p-error">
                             {{ validateDate(project.date_debut_projet, true) }}
                         </small>
@@ -604,15 +631,15 @@ const handleRemoveTeam = async (teamId) => {
                     <div class="field">
                         <label for="date_fin_projet" class="font-bold block mb-2">End Date *</label>
                         <Calendar
-                            id="date_fin_projet"
-                            v-model="project.date_fin_projet"
-                            :showIcon="true"
-                            dateFormat="yy-mm-dd"
-                            placeholder="Select an End Date"
-                            :minDate="project.date_debut_projet"
-                            class="w-full"
-                            :class="{ 'p-invalid': submitted && validateDate(project.date_fin_projet, false) }"
-                        />
+        id="date_fin_projet"
+        v-model="project.date_fin_projet"
+        :showIcon="true"
+        dateFormat="yy-mm-dd"
+        placeholder="Select an End Date"
+        :minDate="project.date_debut_projet"
+        class="w-full"
+        @date-select="handleDateSelect($event, 'date_fin_projet')"
+    />
                         <small v-if="submitted && validateDate(project.date_fin_projet, false)" class="p-error">
                             {{ validateDate(project.date_fin_projet, false) }}
                         </small>
