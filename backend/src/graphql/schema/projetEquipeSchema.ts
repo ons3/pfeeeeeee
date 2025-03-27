@@ -6,12 +6,17 @@ export const projetEquipeTypeDefs = gql`
     idEquipe: String!
   }
 
+  type MutationResponse {
+    success: Boolean!
+    message: String
+  }
+
   extend type Query {
     projetEquipes: [ProjetEquipe!]!
   }
 
   extend type Mutation {
-    addEquipeToProject(idProjet: String!, idEquipe: String!): ProjetEquipe
-    removeEquipeFromProject(idProjet: String!, idEquipe: String!): String
+    addEquipeToProject(idProjet: String!, idEquipe: String!): MutationResponse
+    removeEquipeFromProject(idProjet: String!, idEquipe: String!): MutationResponse
   }
 `;
