@@ -98,47 +98,82 @@ const { mutate: deleteProjetMutation } = useMutation(DELETE_PROJECT);
 const { mutate: addTeamToProject } = useMutation(ADD_TEAM_TO_PROJECT);
 const { mutate: removeTeamFromProject } = useMutation(REMOVE_TEAM_FROM_PROJECT);
 
-// Date handling functions
+// Date handling functions (copied exactly from tasks.vue)
 const formatDBDate = (dateString) => {
     if (!dateString) return '-';
-
-    // Handle both Date objects and string inputs
     const date = dateString instanceof Date ? dateString : new Date(dateString);
-
-    // Check if date is valid
-    if (isNaN(date.getTime())) return '-';
-
-    // Format as local date (YYYY-MM-DD)
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
+    return isNaN(date.getTime()) ? '-' : date.toLocaleDateString();
 };
 
 const formatDateForDB = (date) => {
     if (!date) return null;
-
     if (date instanceof Date) {
-        // Get the local date components (ignoring timezone)
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        return date.toISOString().split('T')[0];
     }
-
     if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return date;
     }
-
     return null;
 };
 
 const handleDateSelect = (event, field) => {
+    if (isEditMode.value) return; // Prevent date changes in edit mode
     const selectedDate = new Date(event);
-    selectedDate.setHours(12, 0, 0, 0); // Set to noon to avoid timezone issues
+    selectedDate.setHours(12, 0, 0, 0);
     project.value[field] = selectedDate;
 };
+
+const isPastDate = (date) => {
+    if (!date) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return new Date(date) < today;
+};
+
+// Validation functions (copied from tasks.vue but for projects)
+const validateProjectName = (name) => {
+    if (!name) return 'Project name is required';
+    if (name.length < 2 || name.length > 50) return 'Project name must be between 2 and 50 characters';
+    return null;
+};
+
+const validateProjectDescription = (description) => {
+    if (description && (description.length < 10 || description.length > 500)) {
+        return 'Description must be between 10 and 500 characters';
+    }
+    return null;
+};
+
+const validateDate = (date, isStartDate) => {
+    if (!date) return isStartDate ? 'Date is required' : null;
+    if (!isEditMode.value && isPastDate(date)) return 'Cannot select a date in the past';
+    return null;
+};
+
+const validateEndDate = (startDate, endDate) => {
+    if (!startDate) return 'Start date must be set first';
+    if (!endDate) return 'End date is required';
+    if (!isEditMode.value && isPastDate(endDate)) return 'Cannot select a date in the past';
+    if (new Date(endDate) < new Date(startDate)) return 'End date must be after start date';
+    return null;
+};
+
+const validateForm = () => {
+    const nameError = validateProjectName(project.value.nom_projet);
+    const descriptionError = validateProjectDescription(project.value.description_projet);
+    const startDateError = validateDate(project.value.date_debut_projet, true);
+    const endDateError = validateEndDate(project.value.date_debut_projet, project.value.date_fin_projet);
+
+    if (nameError) toast.add({ severity: 'error', summary: 'Error', detail: nameError, life: 3000 });
+    if (descriptionError) toast.add({ severity: 'error', summary: 'Error', detail: descriptionError, life: 3000 });
+    if (startDateError) toast.add({ severity: 'error', summary: 'Error', detail: startDateError, life: 3000 });
+    if (endDateError) toast.add({ severity: 'error', summary: 'Error', detail: endDateError, life: 3000 });
+
+    return !(nameError || descriptionError || startDateError || endDateError);
+};
+
+// Computed property for edit mode
+const isEditMode = computed(() => !!project.value.idProjet);
 
 // Watchers
 watch(projectsResult, (newResult) => {
@@ -197,6 +232,9 @@ const openNew = () => {
 const editProject = async (proj) => {
     project.value = {
         ...proj,
+        // Store original dates that cannot be modified
+        originalDateDebutProjet: proj.date_debut_projet,
+        originalDateFinProjet: proj.date_fin_projet,
         equipes: proj.equipes || []
     };
     projectDialog.value = true;
@@ -223,17 +261,16 @@ const saveProject = async () => {
     loading.value = true;
 
     try {
-        // Prepare the project data without teams for initial creation
         const projectData = {
-            nom_projet: project.value.nom_projet,
-            description_projet: project.value.description_projet,
-            date_debut_projet: formatDateForDB(project.value.date_debut_projet),
-            date_fin_projet: formatDateForDB(project.value.date_fin_projet),
+            nom_projet: project.value.nom_projet.trim(),
+            description_projet: project.value.description_projet?.trim() || null,
+            // Use original dates for updates, new dates for creates
+            date_debut_projet: isEditMode.value ? formatDateForDB(project.value.originalDateDebutProjet) : formatDateForDB(project.value.date_debut_projet),
+            date_fin_projet: isEditMode.value ? formatDateForDB(project.value.originalDateFinProjet) : formatDateForDB(project.value.date_fin_projet),
             statut_projet: project.value.statut_projet
         };
 
         if (project.value.idProjet) {
-            // For existing project, update with teams
             await updateProject({
                 id: project.value.idProjet,
                 ...projectData,
@@ -242,18 +279,16 @@ const saveProject = async () => {
             toast.add({
                 severity: 'success',
                 summary: 'Success',
-                detail: 'Project updated',
+                detail: 'Project updated (dates preserved)',
                 life: 3000
             });
         } else {
-            // For new project, first create without teams
             const result = await createProject(projectData);
 
             if (result?.data?.createProjet) {
                 const newProjectId = result.data.createProjet.idProjet;
                 project.value.idProjet = newProjectId;
 
-                // Then add teams one by one
                 if (project.value.equipes.length > 0) {
                     const addTeamPromises = project.value.equipes.map((team) =>
                         addTeamToProject({
@@ -268,7 +303,7 @@ const saveProject = async () => {
                 toast.add({
                     severity: 'success',
                     summary: 'Success',
-                    detail: 'Project created with teams',
+                    detail: 'Project created successfully',
                     life: 3000
                 });
             }
@@ -281,8 +316,8 @@ const saveProject = async () => {
         toast.add({
             severity: 'error',
             summary: 'Error',
-            detail: 'Failed to save project: ' + error.message,
-            life: 3000
+            detail: 'Failed to save project: ' + (error.graphQLErrors?.[0]?.message || error.message),
+            life: 5000
         });
     } finally {
         loading.value = false;
@@ -297,28 +332,23 @@ const confirmDeleteProject = (proj) => {
 const deleteProject = async () => {
     try {
         const { data } = await deleteProjetMutation({ id: project.value.idProjet });
-        if (data.deleteProjet.success) {
+        if (data?.deleteProjet?.success) {
             await refetchProjects();
             toast.add({
                 severity: 'success',
                 summary: 'Success',
-                detail: data.deleteProjet.message,
+                detail: data.deleteProjet.message || 'Project deleted successfully',
                 life: 3000
             });
         } else {
-            toast.add({
-                severity: 'error',
-                summary: 'Error',
-                detail: data.deleteProjet.message,
-                life: 3000
-            });
+            throw new Error(data?.deleteProjet?.message || 'Failed to delete project');
         }
     } catch (error) {
         console.error('Error deleting project:', error);
         toast.add({
             severity: 'error',
             summary: 'Error',
-            detail: 'Failed to delete project',
+            detail: error.message || 'Failed to delete project',
             life: 3000
         });
     } finally {
@@ -334,22 +364,20 @@ const confirmDeleteSelected = () => {
 const deleteSelectedProjects = async () => {
     try {
         const deletePromises = selectedProjects.value.map((proj) => deleteProjetMutation({ id: proj.idProjet }));
-
         await Promise.all(deletePromises);
         await refetchProjects();
-
         toast.add({
             severity: 'success',
             summary: 'Success',
-            detail: 'Selected projects deleted',
+            detail: 'Selected projects deleted successfully',
             life: 3000
         });
     } catch (error) {
-        console.error('Error deleting selected projects:', error);
+        console.error('Error deleting projects:', error);
         toast.add({
             severity: 'error',
             summary: 'Error',
-            detail: 'Failed to delete selected projects',
+            detail: error.message || 'Failed to delete selected projects',
             life: 3000
         });
     } finally {
@@ -364,49 +392,11 @@ const exportCSV = () => {
 
 const getStatusLabel = (status) => {
     const statusSeverity = {
-        todo: 'warn',
-        in_progress: 'info',
+        todo: 'info',
+        in_progress: 'warning',
         end: 'success'
     };
     return statusSeverity[status] || 'info';
-};
-
-const validateName = (name) => {
-    if (!name) return 'Name is required';
-    if (name.length > 100) return 'Name must be less than 100 characters';
-    return null;
-};
-
-const validateDescription = (description) => {
-    if (description && description.length > 500) return 'Description must be less than 500 characters';
-    return null;
-};
-
-const validateDate = (date, isStartDate) => {
-    if (!date) return isStartDate ? 'Start date is required' : 'End date is required';
-    return null;
-};
-
-const validateEndDate = (startDate, endDate) => {
-    if (!startDate || !endDate) return null;
-    if (new Date(endDate) < new Date(startDate)) return 'End date must be after start date';
-    return null;
-};
-
-const validateForm = () => {
-    const nameError = validateName(project.value.nom_projet);
-    const descriptionError = validateDescription(project.value.description_projet);
-    const startDateError = validateDate(project.value.date_debut_projet, true);
-    const endDateError = validateDate(project.value.date_fin_projet, false);
-    const dateRangeError = validateEndDate(project.value.date_debut_projet, project.value.date_fin_projet);
-
-    if (nameError) toast.add({ severity: 'error', summary: 'Error', detail: nameError, life: 3000 });
-    if (descriptionError) toast.add({ severity: 'error', summary: 'Error', detail: descriptionError, life: 3000 });
-    if (startDateError) toast.add({ severity: 'error', summary: 'Error', detail: startDateError, life: 3000 });
-    if (endDateError) toast.add({ severity: 'error', summary: 'Error', detail: endDateError, life: 3000 });
-    if (dateRangeError) toast.add({ severity: 'error', summary: 'Error', detail: dateRangeError, life: 3000 });
-
-    return !(nameError || descriptionError || startDateError || endDateError || dateRangeError);
 };
 
 const handleAddTeam = async (teamId) => {
@@ -416,7 +406,6 @@ const handleAddTeam = async (teamId) => {
         if (!teamToAdd) throw new Error('Team not found');
 
         if (project.value.idProjet) {
-            // For existing project, use the mutation
             const { data } = await addTeamToProject({
                 idProjet: project.value.idProjet,
                 idEquipe: teamId
@@ -435,7 +424,6 @@ const handleAddTeam = async (teamId) => {
                 throw new Error(data.addEquipeToProject.message || 'Failed to add team');
             }
         } else {
-            // For new project, just add to the local array
             project.value.equipes = [...project.value.equipes, teamToAdd];
             dropdownKey.value++;
             toast.add({
@@ -505,14 +493,14 @@ const handleRemoveTeam = async (teamId) => {
             <Toolbar class="mb-4">
                 <template #start>
                     <Button label="New" icon="pi pi-plus" class="mr-2" @click="openNew" />
-                    <Button label="Delete" icon="pi pi-trash" severity="danger" @click="confirmDeleteSelected" :disabled="!selectedProjects || !selectedProjects.length" />
+                    <Button label="Delete" icon="pi pi-trash" severity="danger" @click="confirmDeleteSelected" :disabled="!selectedProjects?.length" />
                 </template>
                 <template #end>
                     <Button label="Export" icon="pi pi-upload" @click="exportCSV" />
                 </template>
             </Toolbar>
 
-            <div v-if="projectsError" class="p-mt-3 p-p-3 p-text-center" style="background: #fff6f6; color: #d32f2f">
+            <div v-if="projectsError" class="p-mt-3 p-p-3 p-text-center error-message">
                 <i class="pi pi-exclamation-triangle p-mr-2"></i>
                 Error loading projects.
                 <Button label="Retry" icon="pi pi-refresh" class="p-button-text p-ml-2" @click="refetchProjects" />
@@ -587,46 +575,67 @@ const handleRemoveTeam = async (teamId) => {
         <Dialog v-model:visible="projectDialog" :style="{ width: '700px' }" header="Project Details" :modal="true" :closable="false">
             <div class="flex flex-col gap-4">
                 <div class="field">
-                    <label for="nom_projet" class="font-bold block mb-2">Name </label>
-                    <InputText id="nom_projet" v-model.trim="project.nom_projet" required="true" autofocus :class="{ 'p-invalid': submitted && !project.nom_projet }" class="w-full" />
+                    <label for="nom_projet" class="font-bold block mb-2">Name *</label>
+                    <InputText id="nom_projet" v-model.trim="project.nom_projet" required autofocus :class="{ 'p-invalid': submitted && !project.nom_projet }" class="w-full" />
                     <small v-if="submitted && !project.nom_projet" class="p-error">Name is required.</small>
                 </div>
 
                 <div class="field">
                     <label for="description_projet" class="font-bold block mb-2">Description</label>
-                    <Textarea id="description_projet" v-model.trim="project.description_projet" rows="3" class="w-full" :class="{ 'p-invalid': submitted && validateDescription(project.description_projet) }" />
-                    <small v-if="submitted && validateDescription(project.description_projet)" class="p-error">
-                        {{ validateDescription(project.description_projet) }}
+                    <Textarea id="description_projet" v-model.trim="project.description_projet" rows="3" class="w-full" :class="{ 'p-invalid': submitted && validateProjectDescription(project.description_projet) }" />
+                    <small v-if="submitted && validateProjectDescription(project.description_projet)" class="p-error">
+                        {{ validateProjectDescription(project.description_projet) }}
                     </small>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="field">
-                        <label for="date_debut_projet" class="font-bold block mb-2">Start Date </label>
-                        <Calendar id="date_debut_projet" v-model="project.date_debut_projet" :showIcon="true" dateFormat="yy-mm-dd" placeholder="Select a Start Date" class="w-full" @date-select="handleDateSelect($event, 'date_debut_projet')" />
-                        <small v-if="submitted && validateDate(project.date_debut_projet, true)" class="p-error">
+                        <label for="date_debut_projet" class="font-bold block mb-2">Start Date *</label>
+                        <Calendar 
+                            id="date_debut_projet" 
+                            v-model="project.date_debut_projet" 
+                            :showIcon="true" 
+                            dateFormat="yy-mm-dd" 
+                            placeholder="Select a Start Date" 
+                            class="w-full"
+                            :minDate="new Date()"
+                            @date-select="handleDateSelect($event, 'date_debut_projet')"
+                            :class="{ 'p-invalid': submitted && (validateDate(project.date_debut_projet, true) || !project.date_debut_projet) }"
+                            :disabled="isEditMode"
+                            required
+                        />
+                        <small v-if="isEditMode" class="text-gray-500">Start date cannot be modified</small>
+                        <small v-else-if="submitted && validateDate(project.date_debut_projet, true)" class="p-error">
                             {{ validateDate(project.date_debut_projet, true) }}
+                        </small>
+                        <small v-else-if="submitted && !project.date_debut_projet" class="p-error">
+                            Start date is required
                         </small>
                     </div>
                     <div class="field">
-                        <label for="date_fin_projet" class="font-bold block mb-2">End Date </label>
+                        <label for="date_fin_projet" class="font-bold block mb-2">End Date *</label>
                         <Calendar
                             id="date_fin_projet"
                             v-model="project.date_fin_projet"
                             :showIcon="true"
                             dateFormat="yy-mm-dd"
                             placeholder="Select an End Date"
-                            :minDate="project.date_debut_projet"
+                            :minDate="project.date_debut_projet || new Date()"
                             class="w-full"
                             @date-select="handleDateSelect($event, 'date_fin_projet')"
+                            :disabled="isEditMode || !project.date_debut_projet"
+                            :class="{ 'p-invalid': submitted && (validateEndDate(project.date_debut_projet, project.date_fin_projet) || !project.date_fin_projet) }"
+                            required
                         />
-                        <small v-if="submitted && validateDate(project.date_fin_projet, false)" class="p-error">
-                            {{ validateDate(project.date_fin_projet, false) }}
+                        <small v-if="isEditMode" class="text-gray-500">End date cannot be modified</small>
+                        <small v-else-if="submitted && validateEndDate(project.date_debut_projet, project.date_fin_projet)" class="p-error">
+                            {{ validateEndDate(project.date_debut_projet, project.date_fin_projet) }}
+                        </small>
+                        <small v-else-if="submitted && !project.date_fin_projet" class="p-error">
+                            End date is required
                         </small>
                     </div>
                 </div>
-
-                <div v-if="project.date_debut_projet && project.date_fin_projet && new Date(project.date_fin_projet) < new Date(project.date_debut_projet)" class="p-error mb-4">End date must be after start date</div>
 
                 <div class="field">
                     <label for="statut_projet" class="font-bold block mb-2">Status</label>
@@ -658,8 +667,7 @@ const handleRemoveTeam = async (teamId) => {
             <div class="flex align-items-center gap-3">
                 <i class="pi pi-exclamation-triangle text-3xl text-red-500" />
                 <span v-if="project">
-                    Are you sure you want to delete project <b>{{ project.nom_projet }}</b
-                    >?
+                    Are you sure you want to delete project <b>{{ project.nom_projet }}</b>?
                 </span>
             </div>
             <template #footer>
@@ -708,6 +716,16 @@ const handleRemoveTeam = async (teamId) => {
     margin-top: 0.5rem;
     color: #f44336;
     font-size: 0.875rem;
+}
+
+.error-message {
+    background: #fff6f6;
+    color: #d32f2f;
+}
+
+.p-calendar:disabled {
+    opacity: 0.8;
+    background-color: #f5f5f5;
 }
 
 .chip-container {
