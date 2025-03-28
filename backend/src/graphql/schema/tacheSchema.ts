@@ -11,12 +11,11 @@ export const tacheTypeDefs = gql`
     idTache: String!
     titreTache: String!
     descriptionTache: String
-    dateDebutTache: String!
+    dateDebutTache: String
     dateFinTache: String
     statutTache: TaskStatus
     duration: Int
     idProjet: String
-    idAdministrateur: String
   }
 
   input TacheFilterInput {
@@ -34,19 +33,21 @@ export const tacheTypeDefs = gql`
     createTache(
       titreTache: String!
       descriptionTache: String
+      dateDebutTache: String
       dateFinTache: String
+      duration: Int
       idProjet: String!
-      idAdministrateur: String!
-      duration: Int  # Add duration to creation input
     ): Tache
 
     updateTache(
       id: String!
       titreTache: String
       descriptionTache: String
+      dateDebutTache: String
       dateFinTache: String
       statutTache: TaskStatus
       duration: Int
+      idProjet: String
     ): Tache
 
     deleteTache(id: String!): String

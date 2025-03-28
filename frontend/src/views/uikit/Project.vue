@@ -37,7 +37,7 @@ const statuses = ref([
 
 // Computed property for available teams
 const availableTeams = computed(() => {
-    if (!project.value.idProjet || !teams.value.length) return [];
+    if (!teams.value.length) return [];
     const assignedTeamIds = project.value.equipes?.map((team) => team.idEquipe) || [];
     return teams.value.filter((team) => !assignedTeamIds.includes(team.idEquipe));
 });
@@ -95,47 +95,49 @@ const { mutate: updateProject } = useMutation(UPDATE_PROJECT, {
 });
 
 const { mutate: deleteProjetMutation } = useMutation(DELETE_PROJECT);
+const { mutate: addTeamToProject } = useMutation(ADD_TEAM_TO_PROJECT);
+const { mutate: removeTeamFromProject } = useMutation(REMOVE_TEAM_FROM_PROJECT);
 
 // Date handling functions
 const formatDBDate = (dateString) => {
-  if (!dateString) return '-';
-  
-  // Handle both Date objects and string inputs
-  const date = dateString instanceof Date ? dateString : new Date(dateString);
-  
-  // Check if date is valid
-  if (isNaN(date.getTime())) return '-';
-  
-  // Format as local date (YYYY-MM-DD)
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  
-  return `${year}-${month}-${day}`;
-};
+    if (!dateString) return '-';
 
-const formatDateForDB = (date) => {
-  if (!date) return null;
-  
-  if (date instanceof Date) {
-    // Get the local date components (ignoring timezone)
+    // Handle both Date objects and string inputs
+    const date = dateString instanceof Date ? dateString : new Date(dateString);
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) return '-';
+
+    // Format as local date (YYYY-MM-DD)
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
+
     return `${year}-${month}-${day}`;
-  }
-  
-  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return date;
-  }
-  
-  return null;
+};
+
+const formatDateForDB = (date) => {
+    if (!date) return null;
+
+    if (date instanceof Date) {
+        // Get the local date components (ignoring timezone)
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return date;
+    }
+
+    return null;
 };
 
 const handleDateSelect = (event, field) => {
-  const selectedDate = new Date(event);
-  selectedDate.setHours(12, 0, 0, 0); // Set to noon to avoid timezone issues
-  project.value[field] = selectedDate;
+    const selectedDate = new Date(event);
+    selectedDate.setHours(12, 0, 0, 0); // Set to noon to avoid timezone issues
+    project.value[field] = selectedDate;
 };
 
 // Watchers
@@ -186,7 +188,7 @@ const openNew = () => {
         date_debut_projet: null,
         date_fin_projet: null,
         statut_projet: 'todo',
-        equipes: []
+        equipes: [] // Initialize with empty array
     };
     submitted.value = false;
     projectDialog.value = true;
@@ -221,19 +223,21 @@ const saveProject = async () => {
     loading.value = true;
 
     try {
+        // Prepare the project data without teams for initial creation
         const projectData = {
             nom_projet: project.value.nom_projet,
             description_projet: project.value.description_projet,
             date_debut_projet: formatDateForDB(project.value.date_debut_projet),
             date_fin_projet: formatDateForDB(project.value.date_fin_projet),
-            statut_projet: project.value.statut_projet,
-            equipes: project.value.equipes || []
+            statut_projet: project.value.statut_projet
         };
 
         if (project.value.idProjet) {
+            // For existing project, update with teams
             await updateProject({
                 id: project.value.idProjet,
-                ...projectData
+                ...projectData,
+                equipes: project.value.equipes.map((team) => ({ idEquipe: team.idEquipe }))
             });
             toast.add({
                 severity: 'success',
@@ -242,13 +246,32 @@ const saveProject = async () => {
                 life: 3000
             });
         } else {
-            await createProject(projectData);
-            toast.add({
-                severity: 'success',
-                summary: 'Success',
-                detail: 'Project created',
-                life: 3000
-            });
+            // For new project, first create without teams
+            const result = await createProject(projectData);
+
+            if (result?.data?.createProjet) {
+                const newProjectId = result.data.createProjet.idProjet;
+                project.value.idProjet = newProjectId;
+
+                // Then add teams one by one
+                if (project.value.equipes.length > 0) {
+                    const addTeamPromises = project.value.equipes.map((team) =>
+                        addTeamToProject({
+                            idProjet: newProjectId,
+                            idEquipe: team.idEquipe
+                        })
+                    );
+
+                    await Promise.all(addTeamPromises);
+                }
+
+                toast.add({
+                    severity: 'success',
+                    summary: 'Success',
+                    detail: 'Project created with teams',
+                    life: 3000
+                });
+            }
         }
 
         await refetchProjects();
@@ -258,13 +281,14 @@ const saveProject = async () => {
         toast.add({
             severity: 'error',
             summary: 'Error',
-            detail: 'Failed to save project',
+            detail: 'Failed to save project: ' + error.message,
             life: 3000
         });
     } finally {
         loading.value = false;
     }
 };
+
 const confirmDeleteProject = (proj) => {
     project.value = proj;
     deleteProjectDialog.value = true;
@@ -386,60 +410,54 @@ const validateForm = () => {
 };
 
 const handleAddTeam = async (teamId) => {
+    addingTeam.value = true;
     try {
-        const response = await fetch('http://localhost:3000/graphql', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json'
-            },
-            body: JSON.stringify({
-                query: `
-          mutation AddTeamToProject($idProjet: String!, $idEquipe: String!) {
-            addEquipeToProject(idProjet: $idProjet, idEquipe: $idEquipe) {
-              success
-              message
+        const teamToAdd = teams.value.find((team) => team.idEquipe === teamId);
+        if (!teamToAdd) throw new Error('Team not found');
+
+        if (project.value.idProjet) {
+            // For existing project, use the mutation
+            const { data } = await addTeamToProject({
+                idProjet: project.value.idProjet,
+                idEquipe: teamId
+            });
+
+            if (data.addEquipeToProject.success) {
+                project.value.equipes = [...project.value.equipes, teamToAdd];
+                dropdownKey.value++;
+                toast.add({
+                    severity: 'success',
+                    summary: 'Success',
+                    detail: data.addEquipeToProject.message || 'Team added successfully',
+                    life: 3000
+                });
+            } else {
+                throw new Error(data.addEquipeToProject.message || 'Failed to add team');
             }
-          }
-        `,
-                variables: {
-                    idProjet: project.value.idProjet,
-                    idEquipe: teamId
-                }
-            })
-        });
-
-        const result = await response.json();
-        console.log('Raw fetch response:', result);
-
-        if (result.errors) {
-            throw new Error(result.errors[0].message);
-        }
-
-        // If the addition was successful
-        if (result.data?.addEquipeToProject?.success) {
-            await refetchProjects();
-            dropdownKey.value++; // Force dropdown refresh
+        } else {
+            // For new project, just add to the local array
+            project.value.equipes = [...project.value.equipes, teamToAdd];
+            dropdownKey.value++;
             toast.add({
                 severity: 'success',
                 summary: 'Success',
-                detail: result.data.addEquipeToProject.message || 'Team added successfully',
+                detail: 'Team added to project',
                 life: 3000
             });
-        } else {
-            throw new Error(result.data?.addEquipeToProject?.message || 'Failed to add team');
         }
+        selectedTeam.value = null;
     } catch (error) {
-        console.error('Fetch error:', error);
+        console.error('Error adding team:', error);
         toast.add({
             severity: 'error',
             summary: 'Error',
-            detail: `Failed to add team: ${error.message}`,
-            life: 5000
+            detail: error.message || 'Failed to add team',
+            life: 3000
         });
+    } finally {
+        addingTeam.value = false;
     }
 };
-
 
 const confirmRemoveTeam = (teamId, teamName) => {
     teamToRemove.value = { id: teamId, name: teamName };
@@ -447,68 +465,38 @@ const confirmRemoveTeam = (teamId, teamName) => {
 };
 
 const handleRemoveTeam = async (teamId) => {
-    removingTeam.value = true; // Show loading state
-    
+    removingTeam.value = true;
     try {
-        const response = await fetch('http://localhost:3000/graphql', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json'
-            },
-            body: JSON.stringify({
-                query: `
-          mutation RemoveTeamFromProject($idProjet: String!, $idEquipe: String!) {
-            removeEquipeFromProject(idProjet: $idProjet, idEquipe: $idEquipe) {
-              success
-              message
-            }
-          }
-        `,
-                variables: {
-                    idProjet: project.value.idProjet,
-                    idEquipe: teamId
-                }
-            })
+        const { data } = await removeTeamFromProject({
+            idProjet: project.value.idProjet,
+            idEquipe: teamId
         });
 
-        const result = await response.json();
-        console.log('Raw fetch response:', result);
-
-        if (result.errors) {
-            throw new Error(result.errors[0].message);
-        }
-
-        // If the removal was successful
-        if (result.data?.removeEquipeFromProject?.success) {
+        if (data.removeEquipeFromProject.success) {
             await refetchProjects();
-            dropdownKey.value++; // Force dropdown refresh
+            dropdownKey.value++;
             toast.add({
                 severity: 'success',
                 summary: 'Success',
-                detail: result.data.removeEquipeFromProject.message || 'Team removed successfully',
+                detail: data.removeEquipeFromProject.message || 'Team removed successfully',
                 life: 3000
             });
-            
-            // Close the dialog after successful removal
             removeTeamDialog.value = false;
-            teamToRemove.value = { id: null, name: '' };
         } else {
-            throw new Error(result.data?.removeEquipeFromProject?.message || 'Failed to remove team');
+            throw new Error(data.removeEquipeFromProject.message || 'Failed to remove team');
         }
     } catch (error) {
-        console.error('Fetch error:', error);
+        console.error('Error removing team:', error);
         toast.add({
             severity: 'error',
             summary: 'Error',
-            detail: `Failed to remove team: ${error.message}`,
-            life: 5000
+            detail: error.message || 'Failed to remove team',
+            life: 3000
         });
     } finally {
-        removingTeam.value = false; // Hide loading state
+        removingTeam.value = false;
     }
 };
-
 </script>
 
 <template>
@@ -599,7 +587,7 @@ const handleRemoveTeam = async (teamId) => {
         <Dialog v-model:visible="projectDialog" :style="{ width: '700px' }" header="Project Details" :modal="true" :closable="false">
             <div class="flex flex-col gap-4">
                 <div class="field">
-                    <label for="nom_projet" class="font-bold block mb-2">Name *</label>
+                    <label for="nom_projet" class="font-bold block mb-2">Name </label>
                     <InputText id="nom_projet" v-model.trim="project.nom_projet" required="true" autofocus :class="{ 'p-invalid': submitted && !project.nom_projet }" class="w-full" />
                     <small v-if="submitted && !project.nom_projet" class="p-error">Name is required.</small>
                 </div>
@@ -614,32 +602,24 @@ const handleRemoveTeam = async (teamId) => {
 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="field">
-                        <label for="date_debut_projet" class="font-bold block mb-2">Start Date *</label>
-                        <Calendar
-        id="date_debut_projet"
-        v-model="project.date_debut_projet"
-        :showIcon="true"
-        dateFormat="yy-mm-dd"
-        placeholder="Select a Start Date"
-        class="w-full"
-        @date-select="handleDateSelect($event, 'date_debut_projet')"
-    />
+                        <label for="date_debut_projet" class="font-bold block mb-2">Start Date </label>
+                        <Calendar id="date_debut_projet" v-model="project.date_debut_projet" :showIcon="true" dateFormat="yy-mm-dd" placeholder="Select a Start Date" class="w-full" @date-select="handleDateSelect($event, 'date_debut_projet')" />
                         <small v-if="submitted && validateDate(project.date_debut_projet, true)" class="p-error">
                             {{ validateDate(project.date_debut_projet, true) }}
                         </small>
                     </div>
                     <div class="field">
-                        <label for="date_fin_projet" class="font-bold block mb-2">End Date *</label>
+                        <label for="date_fin_projet" class="font-bold block mb-2">End Date </label>
                         <Calendar
-        id="date_fin_projet"
-        v-model="project.date_fin_projet"
-        :showIcon="true"
-        dateFormat="yy-mm-dd"
-        placeholder="Select an End Date"
-        :minDate="project.date_debut_projet"
-        class="w-full"
-        @date-select="handleDateSelect($event, 'date_fin_projet')"
-    />
+                            id="date_fin_projet"
+                            v-model="project.date_fin_projet"
+                            :showIcon="true"
+                            dateFormat="yy-mm-dd"
+                            placeholder="Select an End Date"
+                            :minDate="project.date_debut_projet"
+                            class="w-full"
+                            @date-select="handleDateSelect($event, 'date_fin_projet')"
+                        />
                         <small v-if="submitted && validateDate(project.date_fin_projet, false)" class="p-error">
                             {{ validateDate(project.date_fin_projet, false) }}
                         </small>
@@ -653,7 +633,7 @@ const handleRemoveTeam = async (teamId) => {
                     <Dropdown id="statut_projet" v-model="project.statut_projet" :options="statuses" optionLabel="label" optionValue="value" placeholder="Select a Status" class="w-full" />
                 </div>
 
-                <div class="field" v-if="project.idProjet">
+                <div class="field">
                     <label class="font-bold block mb-2">Teams Management</label>
                     <div class="flex gap-2">
                         <Dropdown :key="dropdownKey" v-model="selectedTeam" :options="availableTeams" optionLabel="nom_equipe" optionValue="idEquipe" placeholder="Select a team" class="w-full" :loading="teamsLoading" :disabled="teamsLoading" />
@@ -665,9 +645,6 @@ const handleRemoveTeam = async (teamId) => {
                             <Chip v-for="team in project.equipes" :key="team.idEquipe" :label="team.nom_equipe" removable @remove="confirmRemoveTeam(team.idEquipe, team.nom_equipe)" />
                         </div>
                     </div>
-                </div>
-                <div v-else class="p-3 bg-gray-100 rounded">
-                    <p class="text-gray-600">Save the project first to manage teams.</p>
                 </div>
             </div>
 

@@ -32,7 +32,7 @@ const filters = ref({
 
 // Computed properties
 const availableProjects = computed(() => {
-    if (!team.value.idEquipe || !projects.value.length) return [];
+    if (!projects.value.length) return [];
     const assignedProjectIds = team.value.projets?.map((project) => project.idProjet) || [];
     return projects.value.filter((project) => !assignedProjectIds.includes(project.idProjet));
 });
@@ -48,10 +48,10 @@ const {
     errorPolicy: 'all'
 });
 
-const { 
+const {
     result: projectsResult,
     loading: projectsLoading,
-    refetch: refetchProjects 
+    refetch: refetchProjects
 } = useQuery(GET_PROJECTS, null, {
     fetchPolicy: 'cache-and-network'
 });
@@ -83,9 +83,7 @@ const { mutate: updateTeam } = useMutation(UPDATE_TEAM, {
         cache.writeQuery({
             query: GET_TEAMS,
             data: {
-                equipes: (existingData?.equipes || []).map((t) => 
-                    t.idEquipe === updatedTeam.idEquipe ? updatedTeam : t
-                )
+                equipes: (existingData?.equipes || []).map((t) => (t.idEquipe === updatedTeam.idEquipe ? updatedTeam : t))
             }
         });
     }
@@ -145,7 +143,7 @@ const editTeam = async (t) => {
         projets: t.projets || []
     };
     teamDialog.value = true;
-    
+
     try {
         await refetchProjects();
         dropdownKey.value++;
@@ -162,14 +160,14 @@ const hideDialog = () => {
 };
 
 const validateName = (name) => {
-    if (!name) return 'Team name is required';
-    if (name.length < 2 || name.length > 50) return 'Name must be between 2-50 characters';
+    if (!name) return 'Name is required';
+    if (name.length < 2 || name.length > 50) return 'Name must be between 2 and 50 characters';
     return null;
 };
 
 const validateDescription = (description) => {
     if (!description) return 'Description is required';
-    if (description.length < 10 || description.length > 500) return 'Description must be between 10-500 characters';
+    if (description.length < 10 || description.length > 500) return 'Description must be between 10 and 500 characters';
     return null;
 };
 
@@ -191,11 +189,12 @@ const saveTeam = async () => {
 
     try {
         const teamData = {
-            nom_equipe: team.value.nom_equipe,
-            description_equipe: team.value.description_equipe
+            nom_equipe: team.value.nom_equipe.trim(),
+            description_equipe: team.value.description_equipe.trim()
         };
 
         if (team.value.idEquipe) {
+            // Update existing team
             await updateTeam({
                 id: team.value.idEquipe,
                 ...teamData
@@ -207,19 +206,44 @@ const saveTeam = async () => {
                 life: 3000
             });
         } else {
-            await createTeam(teamData);
-            toast.add({
-                severity: 'success',
-                summary: 'Success',
-                detail: 'Team created',
-                life: 3000
-            });
+            // Create new team
+            const result = await createTeam(teamData);
+
+            if (result?.data?.createEquipe) {
+                const newTeamId = result.data.createEquipe.idEquipe;
+                team.value.idEquipe = newTeamId;
+
+                // Add projects if any were selected
+                if (team.value.projets.length > 0) {
+                    const addProjectPromises = team.value.projets.map((project) =>
+                        addTeamToProject({
+                            idProjet: project.idProjet,
+                            idEquipe: newTeamId
+                        })
+                    );
+
+                    await Promise.all(addProjectPromises);
+                }
+
+                toast.add({
+                    severity: 'success',
+                    summary: 'Success',
+                    detail: 'Team created with projects',
+                    life: 3000
+                });
+            }
         }
 
         await refetchTeams();
         teamDialog.value = false;
     } catch (error) {
-        handleError(error, 'Failed to save team');
+        console.error('Error saving team:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to save team: ' + (error.graphQLErrors?.[0]?.message || error.message),
+            life: 3000
+        });
     } finally {
         loading.value = false;
     }
@@ -258,9 +282,7 @@ const confirmDeleteSelected = () => {
 
 const deleteSelectedTeams = async () => {
     try {
-        const deletePromises = selectedTeams.value.map((team) => 
-            deleteTeamMutation({ id: team.idEquipe })
-        );
+        const deletePromises = selectedTeams.value.map((team) => deleteTeamMutation({ id: team.idEquipe }));
 
         await Promise.all(deletePromises);
         await refetchTeams();
@@ -284,11 +306,8 @@ const exportCSV = () => {
 };
 
 const handleError = (error, defaultMessage) => {
-    const detail = error.graphQLErrors?.[0]?.message || 
-                 error.networkError?.message || 
-                 error.message || 
-                 defaultMessage;
-    
+    const detail = error.graphQLErrors?.[0]?.message || error.networkError?.message || error.message || defaultMessage;
+
     console.error('Error:', error);
     toast.add({
         severity: 'error',
@@ -299,7 +318,7 @@ const handleError = (error, defaultMessage) => {
 };
 
 const handleAddProject = async (projectId) => {
-    if (!projectId || !team.value.idEquipe) {
+    if (!projectId) {
         toast.add({
             severity: 'warn',
             summary: 'Warning',
@@ -312,24 +331,40 @@ const handleAddProject = async (projectId) => {
     addingProject.value = true;
 
     try {
-        const { data } = await addTeamToProject({
-            idProjet: projectId,
-            idEquipe: team.value.idEquipe
-        });
+        const projectToAdd = projects.value.find((p) => p.idProjet === projectId);
+        if (!projectToAdd) throw new Error('Project not found');
 
-        if (data?.addEquipeToProject?.success) {
-            await refetchTeams();
-            selectedProject.value = null;
+        if (team.value.idEquipe) {
+            // For existing team, use the mutation
+            const { data } = await addTeamToProject({
+                idProjet: projectId,
+                idEquipe: team.value.idEquipe
+            });
+
+            if (data?.addEquipeToProject?.success) {
+                team.value.projets = [...team.value.projets, projectToAdd];
+                dropdownKey.value++;
+                toast.add({
+                    severity: 'success',
+                    summary: 'Success',
+                    detail: data.addEquipeToProject.message || 'Project added to team',
+                    life: 3000
+                });
+            } else {
+                throw new Error(data?.addEquipeToProject?.message || 'Failed to add project');
+            }
+        } else {
+            // For new team, just add to the local array
+            team.value.projets = [...team.value.projets, projectToAdd];
             dropdownKey.value++;
             toast.add({
                 severity: 'success',
                 summary: 'Success',
-                detail: data.addEquipeToProject.message || 'Project added to team',
+                detail: 'Project added to team',
                 life: 3000
             });
-        } else {
-            throw new Error(data?.addEquipeToProject?.message || 'Failed to add project');
         }
+        selectedProject.value = null;
     } catch (error) {
         handleError(error, 'Failed to add project to team');
     } finally {
@@ -348,22 +383,35 @@ const handleRemoveProject = async (projectId) => {
     removingProject.value = true;
 
     try {
-        const { data } = await removeTeamFromProject({
-            idProjet: projectId,
-            idEquipe: team.value.idEquipe
-        });
+        if (team.value.idEquipe) {
+            // For existing team, use the mutation
+            const { data } = await removeTeamFromProject({
+                idProjet: projectId,
+                idEquipe: team.value.idEquipe
+            });
 
-        if (data?.removeEquipeFromProject?.success) {
-            await refetchTeams();
+            if (data?.removeEquipeFromProject?.success) {
+                team.value.projets = team.value.projets.filter((p) => p.idProjet !== projectId);
+                dropdownKey.value++;
+                toast.add({
+                    severity: 'success',
+                    summary: 'Success',
+                    detail: data.removeEquipeFromProject.message || 'Project removed from team',
+                    life: 3000
+                });
+            } else {
+                throw new Error(data?.removeEquipeFromProject?.message || 'Failed to remove project');
+            }
+        } else {
+            // For new team, just remove from the local array
+            team.value.projets = team.value.projets.filter((p) => p.idProjet !== projectId);
             dropdownKey.value++;
             toast.add({
                 severity: 'success',
                 summary: 'Success',
-                detail: data.removeEquipeFromProject.message || 'Project removed from team',
+                detail: 'Project removed from team',
                 life: 3000
             });
-        } else {
-            throw new Error(data?.removeEquipeFromProject?.message || 'Failed to remove project');
         }
     } catch (error) {
         handleError(error, 'Failed to remove project from team');
@@ -380,13 +428,7 @@ const handleRemoveProject = async (projectId) => {
             <Toolbar class="mb-4">
                 <template #start>
                     <Button label="New" icon="pi pi-plus" class="mr-2" @click="openNew" />
-                    <Button 
-                        label="Delete" 
-                        icon="pi pi-trash" 
-                        severity="danger" 
-                        @click="confirmDeleteSelected" 
-                        :disabled="!selectedTeams?.length" 
-                    />
+                    <Button label="Delete" icon="pi pi-trash" severity="danger" @click="confirmDeleteSelected" :disabled="!selectedTeams?.length" />
                 </template>
                 <template #end>
                     <Button label="Export" icon="pi pi-upload" @click="exportCSV" />
@@ -437,12 +479,7 @@ const handleRemoveProject = async (projectId) => {
                 <Column header="Projects">
                     <template #body="{ data }">
                         <div class="flex flex-wrap gap-1">
-                            <Chip 
-                                v-for="project in data.projets" 
-                                :key="project.idProjet" 
-                                :label="project.nom_projet" 
-                                class="text-sm" 
-                            />
+                            <Chip v-for="project in data.projets" :key="project.idProjet" :label="project.nom_projet" class="text-sm" />
                         </div>
                     </template>
                 </Column>
@@ -459,14 +496,7 @@ const handleRemoveProject = async (projectId) => {
             <div class="flex flex-col gap-4">
                 <div class="field">
                     <label for="nom_equipe" class="font-bold block mb-2">Name *</label>
-                    <InputText 
-                        id="nom_equipe" 
-                        v-model.trim="team.nom_equipe" 
-                        required 
-                        autofocus 
-                        :class="{ 'p-invalid': submitted && validateName(team.nom_equipe) }" 
-                        class="w-full" 
-                    />
+                    <InputText id="nom_equipe" v-model.trim="team.nom_equipe" required autofocus :class="{ 'p-invalid': submitted && validateName(team.nom_equipe) }" class="w-full" />
                     <small v-if="submitted && validateName(team.nom_equipe)" class="p-error">
                         {{ validateName(team.nom_equipe) }}
                     </small>
@@ -474,55 +504,34 @@ const handleRemoveProject = async (projectId) => {
 
                 <div class="field">
                     <label for="description_equipe" class="font-bold block mb-2">Description *</label>
-                    <Textarea
-                        id="description_equipe"
-                        v-model.trim="team.description_equipe"
-                        rows="3"
-                        class="w-full"
-                        :class="{ 'p-invalid': submitted && validateDescription(team.description_equipe) }"
-                    />
+                    <Textarea id="description_equipe" v-model.trim="team.description_equipe" rows="3" class="w-full" :class="{ 'p-invalid': submitted && validateDescription(team.description_equipe) }" />
                     <small v-if="submitted && validateDescription(team.description_equipe)" class="p-error">
                         {{ validateDescription(team.description_equipe) }}
                     </small>
                 </div>
 
-                <div class="field" v-if="team.idEquipe">
+                <div class="field">
                     <label class="font-bold block mb-2">Projects Management</label>
                     <div class="flex gap-2">
-                        <Dropdown 
+                        <Dropdown
                             :key="dropdownKey"
-                            v-model="selectedProject" 
-                            :options="availableProjects" 
-                            optionLabel="nom_projet" 
-                            optionValue="idProjet" 
-                            placeholder="Select a project" 
+                            v-model="selectedProject"
+                            :options="availableProjects"
+                            optionLabel="nom_projet"
+                            optionValue="idProjet"
+                            placeholder="Select a project"
                             class="w-full"
                             :loading="projectsLoading"
                             :disabled="projectsLoading"
                         />
-                        <Button 
-                            label="Add Project" 
-                            icon="pi pi-plus" 
-                            @click="handleAddProject(selectedProject)" 
-                            :disabled="!selectedProject || projectsLoading" 
-                            :loading="addingProject" 
-                        />
+                        <Button label="Add Project" icon="pi pi-plus" @click="handleAddProject(selectedProject)" :disabled="!selectedProject || projectsLoading" :loading="addingProject" />
                     </div>
                     <div class="mt-4">
                         <h5 class="font-bold mb-2">Assigned Projects</h5>
                         <div class="flex flex-wrap gap-2">
-                            <Chip 
-                                v-for="project in team.projets" 
-                                :key="project.idProjet" 
-                                :label="project.nom_projet" 
-                                removable 
-                                @remove="confirmRemoveProject(project.idProjet, project.nom_projet)" 
-                            />
+                            <Chip v-for="project in team.projets" :key="project.idProjet" :label="project.nom_projet" removable @remove="confirmRemoveProject(project.idProjet, project.nom_projet)" />
                         </div>
                     </div>
-                </div>
-                <div v-else class="p-3 bg-gray-100 rounded">
-                    <p class="text-gray-600">Save the team first to assign projects.</p>
                 </div>
             </div>
 
@@ -536,7 +545,8 @@ const handleRemoveProject = async (projectId) => {
             <div class="flex align-items-center gap-3">
                 <i class="pi pi-exclamation-triangle text-3xl text-red-500" />
                 <span v-if="team">
-                    Are you sure you want to delete team <b>{{ team.nom_equipe }}</b>?
+                    Are you sure you want to delete team <b>{{ team.nom_equipe }}</b
+                    >?
                 </span>
             </div>
             <template #footer>
@@ -588,7 +598,7 @@ const handleRemoveProject = async (projectId) => {
 }
 
 .error-message {
-    background: #fff6f6; 
+    background: #fff6f6;
     color: #d32f2f;
 }
 
