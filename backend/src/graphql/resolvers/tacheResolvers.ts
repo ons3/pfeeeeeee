@@ -6,7 +6,7 @@ export const tacheResolvers = {
     taches: async (_: any, __: any, { pool }: { pool: sql.ConnectionPool }) => {
       try {
         const result = await pool.request().query(`
-          SELECT idTache, titre_tache, description_tache, date_debut_tache, date_fin_tache, statut_tache, duration, idProjet, idAdministrateur
+          SELECT idTache, titre_tache, description_tache, date_debut_tache, date_fin_tache, statut_tache, duration, idProjet
           FROM Tache
         `);
 
@@ -14,12 +14,11 @@ export const tacheResolvers = {
           idTache: tache.idTache,
           titreTache: tache.titre_tache,
           descriptionTache: tache.description_tache,
-          dateDebutTache: new Date(tache.date_debut_tache).toISOString(),
+          dateDebutTache: tache.date_debut_tache ? new Date(tache.date_debut_tache).toISOString() : null,
           dateFinTache: tache.date_fin_tache ? new Date(tache.date_fin_tache).toISOString() : null,
           statutTache: tache.statut_tache,
           duration: tache.duration,
-          idProjet: tache.idProjet,
-          idAdministrateur: tache.idAdministrateur,
+          idProjet: tache.idProjet
         }));
       } catch (error) {
         console.error("Error fetching taches:", error);
@@ -32,7 +31,7 @@ export const tacheResolvers = {
         const result = await pool.request()
           .input('id', sql.UniqueIdentifier, id)
           .query(`
-            SELECT idTache, titre_tache, description_tache, date_debut_tache, date_fin_tache, statut_tache, duration, idProjet, idAdministrateur
+            SELECT idTache, titre_tache, description_tache, date_debut_tache, date_fin_tache, statut_tache, duration, idProjet
             FROM Tache
             WHERE idTache = @id
           `);
@@ -46,12 +45,11 @@ export const tacheResolvers = {
           idTache: tache.idTache,
           titreTache: tache.titre_tache,
           descriptionTache: tache.description_tache,
-          dateDebutTache: new Date(tache.date_debut_tache).toISOString(),
+          dateDebutTache: tache.date_debut_tache ? new Date(tache.date_debut_tache).toISOString() : null,
           dateFinTache: tache.date_fin_tache ? new Date(tache.date_fin_tache).toISOString() : null,
           statutTache: tache.statut_tache,
           duration: tache.duration,
-          idProjet: tache.idProjet,
-          idAdministrateur: tache.idAdministrateur,
+          idProjet: tache.idProjet
         };
       } catch (error) {
         console.error("Error fetching tache:", error);
@@ -66,7 +64,7 @@ export const tacheResolvers = {
     ) => {
       try {
         let query = `
-          SELECT idTache, titre_tache, description_tache, date_debut_tache, date_fin_tache, statut_tache, duration, idProjet, idAdministrateur
+          SELECT idTache, titre_tache, description_tache, date_debut_tache, date_fin_tache, statut_tache, duration, idProjet
           FROM Tache
         `;
         const conditions = [];
@@ -95,12 +93,11 @@ export const tacheResolvers = {
           idTache: tache.idTache,
           titreTache: tache.titre_tache,
           descriptionTache: tache.description_tache,
-          dateDebutTache: new Date(tache.date_debut_tache).toISOString(),
+          dateDebutTache: tache.date_debut_tache ? new Date(tache.date_debut_tache).toISOString() : null,
           dateFinTache: tache.date_fin_tache ? new Date(tache.date_fin_tache).toISOString() : null,
           statutTache: tache.statut_tache,
           duration: tache.duration,
-          idProjet: tache.idProjet,
-          idAdministrateur: tache.idAdministrateur,
+          idProjet: tache.idProjet
         }));
       } catch (error) {
         console.error("Error searching taches:", error);
@@ -112,12 +109,13 @@ export const tacheResolvers = {
   Mutation: {
     createTache: async (
       _: any,
-      { titreTache, descriptionTache, duration, idProjet, idAdministrateur }: {
+      { titreTache, descriptionTache, duration, idProjet, dateDebutTache, dateFinTache }: {
         titreTache: string;
         descriptionTache?: string;
         duration: number;
         idProjet: string;
-        idAdministrateur: string;
+        dateDebutTache?: string;
+        dateFinTache?: string;
       },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
@@ -130,20 +128,21 @@ export const tacheResolvers = {
           .input('description_tache', sql.NVarChar, descriptionTache || null)
           .input('duration', sql.Int, duration)
           .input('idProjet', sql.UniqueIdentifier, idProjet)
-          .input('idAdministrateur', sql.UniqueIdentifier, idAdministrateur)
+          .input('date_debut_tache', sql.DateTime, dateDebutTache ? new Date(dateDebutTache) : null)
+          .input('date_fin_tache', sql.DateTime, dateFinTache ? new Date(dateFinTache) : null)
           .query(`
-            INSERT INTO Tache (idTache, titre_tache, description_tache, duration, idProjet, idAdministrateur)
-            VALUES (@idTache, @titre_tache, @description_tache, @duration, @idProjet, @idAdministrateur)
+            INSERT INTO Tache (idTache, titre_tache, description_tache, duration, idProjet, date_debut_tache, date_fin_tache)
+            VALUES (@idTache, @titre_tache, @description_tache, @duration, @idProjet, @date_debut_tache, @date_fin_tache)
           `);
 
         // Fetch the newly created tache to return it
         const newTache = await pool.request()
-            .input('idTache', sql.UniqueIdentifier, idTache)
-            .query(`
-                SELECT idTache, titre_tache, description_tache, date_debut_tache, date_fin_tache, statut_tache, duration, idProjet, idAdministrateur
-                FROM Tache
-                WHERE idTache = @idTache
-            `);
+          .input('idTache', sql.UniqueIdentifier, idTache)
+          .query(`
+            SELECT idTache, titre_tache, description_tache, date_debut_tache, date_fin_tache, statut_tache, duration, idProjet
+            FROM Tache
+            WHERE idTache = @idTache
+          `);
 
         const tache = newTache.recordset[0];
 
@@ -151,12 +150,11 @@ export const tacheResolvers = {
           idTache: tache.idTache,
           titreTache: tache.titre_tache,
           descriptionTache: tache.description_tache,
-          dateDebutTache: new Date(tache.date_debut_tache).toISOString(),
+          dateDebutTache: tache.date_debut_tache ? new Date(tache.date_debut_tache).toISOString() : null,
           dateFinTache: tache.date_fin_tache ? new Date(tache.date_fin_tache).toISOString() : null,
           statutTache: tache.statut_tache,
           duration: tache.duration,
-          idProjet: tache.idProjet,
-          idAdministrateur: tache.idAdministrateur
+          idProjet: tache.idProjet
         };
       } catch (error) {
         console.error("Error creating tache:", error);
@@ -166,59 +164,74 @@ export const tacheResolvers = {
 
     updateTache: async (
       _: any,
-      { id, titreTache, descriptionTache, statutTache, duration }: {
+      { id, titreTache, descriptionTache, statutTache, duration, idProjet, dateDebutTache, dateFinTache }: {
         id: string;
         titreTache?: string;
         descriptionTache?: string;
         statutTache?: string;
         duration?: number;
+        idProjet?: string;
+        dateDebutTache?: string;
+        dateFinTache?: string;
       },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
         const request = pool.request().input('id', sql.UniqueIdentifier, id);
         const updates = [];
-
-        if (titreTache) {
+    
+        if (titreTache !== undefined) {
           updates.push('titre_tache = @titreTache');
           request.input('titreTache', sql.NVarChar, titreTache);
         }
-
-        if (descriptionTache) {
+    
+        if (descriptionTache !== undefined) {
           updates.push('description_tache = @descriptionTache');
           request.input('descriptionTache', sql.NVarChar, descriptionTache);
         }
-
-        if (statutTache === 'END') {
-           updates.push('date_fin_tache = GETDATE()');
-        }
-
-        if (statutTache) {
+    
+        if (statutTache !== undefined) {
           updates.push('statut_tache = @statutTache');
           request.input('statutTache', sql.NVarChar, statutTache);
         }
-        if (duration) {
-            updates.push('duration = @duration');
-            request.input('duration', sql.Int, duration);
+    
+        if (duration !== undefined) {
+          updates.push('duration = @duration');
+          request.input('duration', sql.Int, duration);
         }
-
+    
+        if (idProjet !== undefined && idProjet !== null) {
+          updates.push('idProjet = @idProjet');
+          request.input('idProjet', sql.UniqueIdentifier, idProjet);
+        }
+        
+        if (dateDebutTache !== undefined) {
+          updates.push('date_debut_tache = @dateDebutTache');
+          request.input('dateDebutTache', sql.DateTime, dateDebutTache ? new Date(dateDebutTache) : null);
+        }
+        
+        if (dateFinTache !== undefined) {
+          updates.push('date_fin_tache = @dateFinTache');
+          request.input('dateFinTache', sql.DateTime, dateFinTache ? new Date(dateFinTache) : null);
+        }
+    
         if (updates.length === 0) {
           throw new Error("No updates provided");
         }
-
+    
         const query = `
           UPDATE Tache
           SET ${updates.join(', ')}
           WHERE idTache = @id
         `;
-
+    
         await request.query(query);
-
+        
         // Fetch the updated tache
         const updatedTacheResult = await pool.request()
           .input('id', sql.UniqueIdentifier, id)
           .query(`
-            SELECT idTache, titre_tache, description_tache, date_debut_tache, date_fin_tache, statut_tache, duration, idProjet, idAdministrateur
+            SELECT idTache, titre_tache, description_tache, date_debut_tache, date_fin_tache, statut_tache, duration, idProjet
             FROM Tache
             WHERE idTache = @id
           `);
@@ -233,12 +246,11 @@ export const tacheResolvers = {
           idTache: updatedTache.idTache,
           titreTache: updatedTache.titre_tache,
           descriptionTache: updatedTache.description_tache,
-          dateDebutTache: new Date(updatedTache.date_debut_tache).toISOString(),
+          dateDebutTache: updatedTache.date_debut_tache ? new Date(updatedTache.date_debut_tache).toISOString() : null,
           dateFinTache: updatedTache.date_fin_tache ? new Date(updatedTache.date_fin_tache).toISOString() : null,
           statutTache: updatedTache.statut_tache,
           duration: updatedTache.duration,
-          idProjet: updatedTache.idProjet,
-          idAdministrateur: updatedTache.idAdministrateur,
+          idProjet: updatedTache.idProjet
         };
       } catch (error) {
         console.error("Error updating tache:", error);
