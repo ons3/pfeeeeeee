@@ -7,23 +7,52 @@ import PrimeVue from 'primevue/config';
 import ConfirmationService from 'primevue/confirmationservice';
 import ToastService from 'primevue/toastservice';
 
-import { ApolloClient, InMemoryCache } from '@apollo/client/core';
-import { DefaultApolloClient } from '@vue/apollo-composable'; // Correct import for Vue 3
+import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client/core';
+import { DefaultApolloClient } from '@vue/apollo-composable';
+import { onError } from '@apollo/client/link/error';
 
 import '@/assets/styles.scss';
 
-// Apollo Client setup
-const cache = new InMemoryCache();
-
-const apolloClient = new ApolloClient({
-  uri: 'http://localhost:3000/graphql', // Replace with your GraphQL API endpoint
-  cache,
+// HTTP Link Configuration
+const httpLink = createHttpLink({
+  uri: 'http://localhost:3000/graphql',
+  // Optional: Add if your API requires credentials
+  // credentials: 'include'
 });
 
-// Create the Vue app
+// Enhanced Error Handling
+const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
+  if (graphQLErrors) {
+    graphQLErrors.forEach(({ message, path }) => {
+      console.error(`[GraphQL error] Path: ${path}`, message);
+    });
+  }
+  
+  if (networkError) {
+    console.error('[Network error]', networkError);
+    // Optional: Redirect to error page or show notification
+  }
+});
+
+// Apollo Client Configuration
+const apolloClient = new ApolloClient({
+  link: errorLink.concat(httpLink),
+  cache: new InMemoryCache(),
+  connectToDevTools: process.env.NODE_ENV !== 'production',
+  defaultOptions: {
+    watchQuery: {
+      fetchPolicy: 'cache-and-network',
+    },
+    query: {
+      fetchPolicy: 'network-first',
+    },
+  }
+});
+
+// App Creation
 const app = createApp(App);
 
-// Use plugins
+// Plugins Registration (unchanged from your working version)
 app.use(router);
 app.use(PrimeVue, {
   theme: {
@@ -36,7 +65,7 @@ app.use(PrimeVue, {
 app.use(ToastService);
 app.use(ConfirmationService);
 
-// Provide Apollo Client to the app
+// Provide Apollo Client
 app.provide(DefaultApolloClient, apolloClient);
 
 // Mount the app
