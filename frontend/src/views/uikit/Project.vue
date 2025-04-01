@@ -392,8 +392,8 @@ const exportCSV = () => {
 
 const getStatusLabel = (status) => {
     const statusSeverity = {
-        todo: 'info',
-        in_progress: 'warning',
+        todo: 'warn',
+        in_progress: 'info',
         end: 'success'
     };
     return statusSeverity[status] || 'info';
