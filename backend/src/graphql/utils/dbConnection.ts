@@ -4,6 +4,7 @@ import sql, { ConnectionPool } from 'mssql';
 const config = {
   user: 'sa',
   password: 'Ons17082001',
+
   server: 'localhost',
   database: 'time_tracking',
   options: {
