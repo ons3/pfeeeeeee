@@ -6,7 +6,7 @@ const model = ref([
     {
         label: 'HOME',
         items: [
-            { label: 'Dashboard', icon: 'pi pi-fw pi-home', to: '/app' },
+            { label: 'Dashboard', icon: 'pi pi-fw pi-home', to: '/app/dashboard' },
             { label: 'Time Tracking', icon: 'pi pi-fw pi-clock', to: '/app/TimeTracking' }
         ]
     },
