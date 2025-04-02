@@ -1,15 +1,19 @@
 import { gql } from "apollo-server-express";
 
 export const employeeTypeDefs = gql`
-  type Employee {
-    idEmployee: String!
-    nomEmployee: String!
-    emailEmployee: String!
-    idEquipe: String
-    role: String!  # Added role field
-    equipe: Equipe
-  }
+scalar DateTime
 
+type Employee {
+  idEmployee: String!
+  nomEmployee: String!
+  emailEmployee: String!
+  idEquipe: String
+  role: String!
+  equipe: Equipe
+  disabledUntil: DateTime
+}
+
+  
   type DeleteEmployeeResponse {
     success: Boolean!
     message: String
@@ -43,6 +47,8 @@ export const employeeTypeDefs = gql`
       passwordEmployee: String!
       idEquipe: String
       role: String!  # Added role input for creating employee
+      disabledUntil: String
+
     ): Employee
 
     updateEmployee(
@@ -52,6 +58,7 @@ export const employeeTypeDefs = gql`
       passwordEmployee: String
       idEquipe: String
       role: String  # Optionally update role
+      disabledUntil: String
     ): Employee
 
     deleteEmployee(id: String!): DeleteEmployeeResponse
