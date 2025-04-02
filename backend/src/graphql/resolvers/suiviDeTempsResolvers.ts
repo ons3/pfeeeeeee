@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { GraphQLScalarType, Kind } from 'graphql';
 import { UserInputError, ApolloError } from 'apollo-server-express';
 
-// DateTimeISO Scalar without future date validation
+// DateTimeISO Scalar with robust validation
 const DateTimeISO = new GraphQLScalarType({
   name: 'DateTimeISO',
   description: 'ISO 8601 date with validation',
@@ -41,8 +41,8 @@ const DateTimeISO = new GraphQLScalarType({
   }
 });
 
-// Helper function for database errors
-const handleDatabaseError = (error: any, operation: string) => {
+// Helper function for consistent error handling
+const handleDatabaseError = (error: unknown, operation: string) => {
   console.error(`Database error during ${operation}:`, error);
   throw new ApolloError(`Failed to ${operation}`, 'DATABASE_ERROR', {
     originalError: error,
@@ -50,54 +50,68 @@ const handleDatabaseError = (error: any, operation: string) => {
   });
 };
 
+// Interface for SuiviDeTemp result
+interface SuiviDeTempResult {
+  idsuivi: string;
+  heure_debut_suivi: string;
+  heure_fin_suivi: string | null;
+  duree_suivi: number | null;
+  idEmployee: string;
+  idTache: string;
+  nom_employee: string;
+  email_employee: string;
+  titre_tache: string;
+  statut_tache: string;
+  idProjet?: string;
+  nom_projet?: string;
+  statut_projet?: string;
+}
+
+// Maps database row to GraphQL type
+const mapSuiviResult = (row: SuiviDeTempResult) => ({
+  idsuivi: row.idsuivi,
+  heure_debut_suivi: row.heure_debut_suivi,
+  heure_fin_suivi: row.heure_fin_suivi,
+  duree_suivi: row.duree_suivi,
+  employee: {
+    idEmployee: row.idEmployee,
+    nomEmployee: row.nom_employee,
+    emailEmployee: row.email_employee
+  },
+  tache: {
+    idTache: row.idTache,
+    titreTache: row.titre_tache,
+    statutTache: row.statut_tache,
+    projet: row.idProjet ? {
+      idProjet: row.idProjet,
+      nomProjet: row.nom_projet,
+      statutProjet: row.statut_projet
+    } : null
+  }
+});
+
 export const suiviDeTempsResolvers = {
   DateTimeISO,
   
   Query: {
-    suivisDeTemp: async (_: any, { filters = {} }: any, { pool }: any) => {
+    // Get time entries with filtering capabilities
+    suivisDeTemp: async (_: any, { filters = {} }: any, { pool }: { pool: sql.ConnectionPool }) => {
       try {
-        console.log('Filters received in backend:', filters);
-
-        // Validate input dates
-        if (filters.startDate) {
-          const startDate = new Date(filters.startDate);
-          if (isNaN(startDate.getTime())) {
-            throw new UserInputError('Invalid start date format');
-          }
-        }
-        
-        if (filters.endDate) {
-          const endDate = new Date(filters.endDate);
-          if (isNaN(endDate.getTime())) {
-            throw new UserInputError('Invalid end date format');
-          }
-        }
-
         let query = `
           SELECT 
-            s.idsuivi, 
-            s.heure_debut_suivi, 
-            s.heure_fin_suivi, 
-            s.duree_suivi,
-            s.idEmployee, 
-            s.idTache, 
-            e.nom_employee, 
-            e.email_employee,
-            t.titre_tache, 
-            t.statut_tache,
-            p.idProjet, 
-            p.nom_projet,
-            p.statut_projet
+            s.idsuivi, s.heure_debut_suivi, s.heure_fin_suivi, s.duree_suivi,
+            s.idEmployee, s.idTache, e.nom_employee, e.email_employee,
+            t.titre_tache, t.statut_tache, p.idProjet, p.nom_projet, p.statut_projet
           FROM SuiviDeTemp s
           LEFT JOIN Employee e ON s.idEmployee = e.idEmployee
           LEFT JOIN Tache t ON s.idTache = t.idTache
           LEFT JOIN Projet p ON t.idProjet = p.idProjet
         `;
 
-        const conditions = [];
+        const conditions: string[] = [];
         const request = pool.request();
 
-        // Add filters with proper parameterization
+        // Dynamic filtering
         if (filters.startDate) {
           conditions.push("CONVERT(DATE, s.heure_debut_suivi) >= CONVERT(DATE, @startDate)");
           request.input("startDate", sql.DateTime, new Date(filters.startDate));
@@ -123,270 +137,135 @@ export const suiviDeTempsResolvers = {
           request.input("projectId", sql.UniqueIdentifier, filters.projectId);
         }
 
+        if (filters.isActive !== undefined) {
+          conditions.push(filters.isActive 
+            ? "s.heure_fin_suivi IS NULL" 
+            : "s.heure_fin_suivi IS NOT NULL");
+        }
+
         if (conditions.length > 0) {
           query += ` WHERE ${conditions.join(" AND ")}`;
         }
 
         query += " ORDER BY s.heure_debut_suivi DESC";
 
-        console.log('Generated SQL Query:', query);
-
-        const result = await request.query(query);
-
-        return result.recordset.map((suivi: any) => ({
-          idsuivi: suivi.idsuivi,
-          heure_debut_suivi: suivi.heure_debut_suivi,
-          heure_fin_suivi: suivi.heure_fin_suivi,
-          duree_suivi: suivi.duree_suivi,
-          employee: {
-            idEmployee: suivi.idEmployee,
-            nomEmployee: suivi.nom_employee,
-            emailEmployee: suivi.email_employee
-          },
-          tache: {
-            idTache: suivi.idTache,
-            titreTache: suivi.titre_tache,
-            statutTache: suivi.statut_tache,
-            projet: suivi.idProjet ? {
-              idProjet: suivi.idProjet,
-              nomProjet: suivi.nom_projet,
-              statutProjet: suivi.statut_projet
-            } : null
-          }
-        }));
+        const result = await request.query<SuiviDeTempResult>(query);
+        return result.recordset.map(mapSuiviResult);
       } catch (error) {
-        if (error instanceof UserInputError) {
-          throw error;
-        }
+        if (error instanceof UserInputError) throw error;
         handleDatabaseError(error, 'fetch time entries');
       }
     },
 
-    suiviDeTemp: async (_: any, { id }: any, { pool }: any) => {
+    // Get active time entry for an employee
+    getActiveSuivi: async (_: any, { employeeId }: { employeeId: string }, { pool }: { pool: sql.ConnectionPool }) => {
       try {
         const result = await pool.request()
-          .input("id", sql.UniqueIdentifier, id)
-          .query(`
-            SELECT 
+          .input("findEmployeeId", sql.UniqueIdentifier, employeeId)
+          .query<{
+            idsuivi: string;
+            heure_debut_suivi: string;
+            idTache: string;
+            titre_tache: string;
+            idProjet: string;
+            nom_projet: string;
+          }>(`
+            SELECT TOP 1
               s.idsuivi,
               s.heure_debut_suivi,
-              s.heure_fin_suivi,
-              s.duree_suivi,
-              s.idEmployee,
-              s.idTache,
-              e.nom_employee,
-              e.email_employee,
+              t.idTache,
               t.titre_tache,
-              t.statut_tache,
               p.idProjet,
-              p.nom_projet,
-              p.statut_projet
+              p.nom_projet
             FROM SuiviDeTemp s
-            LEFT JOIN Employee e ON s.idEmployee = e.idEmployee
             LEFT JOIN Tache t ON s.idTache = t.idTache
             LEFT JOIN Projet p ON t.idProjet = p.idProjet
-            WHERE s.idsuivi = @id
+            WHERE s.idEmployee = @findEmployeeId
+              AND s.heure_fin_suivi IS NULL
+            ORDER BY s.heure_debut_suivi DESC
           `);
 
-        if (result.recordset.length === 0) {
-          throw new UserInputError("Time entry not found");
-        }
+        if (result.recordset.length === 0) return null;
 
-        const suivi = result.recordset[0];
         return {
-          idsuivi: suivi.idsuivi,
-          heure_debut_suivi: suivi.heure_debut_suivi,
-          heure_fin_suivi: suivi.heure_fin_suivi,
-          duree_suivi: suivi.duree_suivi,
-          employee: {
-            idEmployee: suivi.idEmployee,
-            nomEmployee: suivi.nom_employee,
-            emailEmployee: suivi.email_employee
-          },
+          idsuivi: result.recordset[0].idsuivi,
+          heureDebutSuivi: result.recordset[0].heure_debut_suivi,
           tache: {
-            idTache: suivi.idTache,
-            titreTache: suivi.titre_tache,
-            statutTache: suivi.statut_tache,
-            projet: suivi.idProjet ? {
-              idProjet: suivi.idProjet,
-              nomProjet: suivi.nom_projet,
-              statutProjet: suivi.statut_projet
-            } : null
+            idTache: result.recordset[0].idTache,
+            idProjet: result.recordset[0].idProjet,
+            titreTache: result.recordset[0].titre_tache,
+            nomProjet: result.recordset[0].nom_projet
           }
         };
       } catch (error) {
-        if (error instanceof UserInputError) {
-          throw error;
-        }
-        handleDatabaseError(error, 'fetch time entry');
-      }
-    },
-
-    suiviStats: async (_: any, { filters, groupBy }: any, { pool }: any) => {
-      try {
-        const validGroups = ['day', 'week', 'month', 'employee', 'project', 'task'];
-        const groupByLower = groupBy.toLowerCase();
-        
-        if (!validGroups.includes(groupByLower)) {
-          throw new UserInputError(`Invalid groupBy parameter. Valid options are: ${validGroups.join(', ')}`);
-        }
-
-        let groupByClause;
-        let nameField = 'groupValue';
-        
-        switch (groupByLower) {
-          case 'day':
-            groupByClause = "CONVERT(DATE, s.heure_debut_suivi)";
-            break;
-          case 'week':
-            groupByClause = "DATEPART(WEEK, s.heure_debut_suivi)";
-            break;
-          case 'month':
-            groupByClause = "DATEPART(MONTH, s.heure_debut_suivi)";
-            break;
-          case 'employee':
-            groupByClause = "s.idEmployee, e.nom_employee";
-            nameField = "e.nom_employee";
-            break;
-          case 'project':
-            groupByClause = "p.idProjet, p.nom_projet";
-            nameField = "p.nom_projet";
-            break;
-          case 'task':
-            groupByClause = "s.idTache, t.titre_tache";
-            nameField = "t.titre_tache";
-            break;
-        }
-
-        let query = `
-          SELECT 
-            ${groupByClause},
-            ${nameField === 'groupValue' ? groupByClause : nameField} AS name,
-            SUM(s.duree_suivi) / 60.0 AS totalHours
-          FROM SuiviDeTemp s
-          LEFT JOIN Employee e ON s.idEmployee = e.idEmployee
-          LEFT JOIN Tache t ON s.idTache = t.idTache
-          LEFT JOIN Projet p ON t.idProjet = p.idProjet
-        `;
-
-        const conditions = [];
-        const request = pool.request();
-
-        if (filters?.startDate) {
-          conditions.push("CONVERT(DATE, s.heure_debut_suivi) >= CONVERT(DATE, @startDate)");
-          request.input("startDate", sql.DateTime, new Date(filters.startDate));
-        }
-
-        if (filters?.endDate) {
-          conditions.push("CONVERT(DATE, s.heure_debut_suivi) <= CONVERT(DATE, @endDate)");
-          request.input("endDate", sql.DateTime, new Date(filters.endDate));
-        }
-
-        if (filters?.employeeId) {
-          conditions.push("s.idEmployee = @employeeId");
-          request.input("employeeId", sql.UniqueIdentifier, filters.employeeId);
-        }
-
-        if (conditions.length > 0) {
-          query += ` WHERE ${conditions.join(" AND ")}`;
-        }
-
-        query += ` GROUP BY ${groupByClause}`;
-        
-        const result = await request.query(query);
-        const totalHours = result.recordset.reduce((sum: number, item: any) => sum + (item.totalHours || 0), 0);
-
-        return {
-          group: groupBy,
-          totalHours,
-          entries: result.recordset.map((item: any) => ({
-            id: item.groupValue,
-            name: item.name || item.groupValue,
-            hours: item.totalHours || 0,
-            percentage: totalHours > 0 ? ((item.totalHours || 0) / totalHours) * 100 : 0
-          }))
-        };
-      } catch (error) {
-        if (error instanceof UserInputError) {
-          throw error;
-        }
-        handleDatabaseError(error, 'fetch statistics');
+        handleDatabaseError(error, 'fetch active time entry');
       }
     }
   },
 
   Mutation: {
-    createSuiviDeTemp: async (_: any, { input }: any, { pool }: any) => {
+    // Create new time entry
+    createSuiviDeTemp: async (
+      _: any, 
+      { input }: { input: { idEmployee: string; idTache: string; heure_debut_suivi: string } }, 
+      { pool }: { pool: sql.ConnectionPool }
+    ) => {
       const transaction = new sql.Transaction(pool);
+      
       try {
         await transaction.begin();
 
-        // Validate input
+        // Input validation
         if (!input.idEmployee || !input.idTache || !input.heure_debut_suivi) {
           throw new UserInputError('Missing required fields');
         }
 
-        // Validate dates
         const startDate = new Date(input.heure_debut_suivi);
         if (isNaN(startDate.getTime())) {
           throw new UserInputError("Invalid start time format");
         }
 
-        let endDate = null;
-        let duration = null;
-        
-        if (input.heure_fin_suivi) {
-          endDate = new Date(input.heure_fin_suivi);
-          if (isNaN(endDate.getTime())) {
-            throw new UserInputError("Invalid end time format");
-          }
-          if (endDate < startDate) {
-            throw new UserInputError("End time must be after start time");
-          }
-          duration = Math.floor((endDate.getTime() - startDate.getTime()) / 60000);
-        }
-
-        // Verify task exists
-        const taskCheck = await new sql.Request(transaction)
-          .input('idTache', sql.UniqueIdentifier, input.idTache)
-          .query('SELECT 1 FROM Tache WHERE idTache = @idTache');
-        
-        if (taskCheck.recordset.length === 0) {
-          throw new UserInputError(`Task with ID ${input.idTache} does not exist`);
-        }
-
-        // Verify employee exists
-        const employeeCheck = await new sql.Request(transaction)
-          .input('idEmployee', sql.UniqueIdentifier, input.idEmployee)
-          .query('SELECT 1 FROM Employee WHERE idEmployee = @idEmployee');
+        // Check employee exists
+        const employeeRequest = new sql.Request(transaction);
+        const employeeCheck = await employeeRequest
+          .input('checkEmpId', sql.UniqueIdentifier, input.idEmployee)
+          .query('SELECT 1 FROM Employee WHERE idEmployee = @checkEmpId');
         
         if (employeeCheck.recordset.length === 0) {
           throw new UserInputError(`Employee with ID ${input.idEmployee} does not exist`);
         }
 
-        // Create entry
+        // Check task exists
+        const taskRequest = new sql.Request(transaction);
+        const taskCheck = await taskRequest
+          .input('checkTaskId', sql.UniqueIdentifier, input.idTache)
+          .query('SELECT 1 FROM Tache WHERE idTache = @checkTaskId');
+        
+        if (taskCheck.recordset.length === 0) {
+          throw new UserInputError(`Task with ID ${input.idTache} does not exist`);
+        }
+
+        // Create new entry
+        const createRequest = new sql.Request(transaction);
         const idsuivi = uuidv4();
-        await new sql.Request(transaction)
-          .input("idsuivi", sql.UniqueIdentifier, idsuivi)
-          .input("heure_debut_suivi", sql.DateTime2, startDate)
-          .input("heure_fin_suivi", endDate ? sql.DateTime2 : sql.NVarChar, endDate)
-          .input("duree_suivi", sql.Int, duration)
-          .input("idEmployee", sql.UniqueIdentifier, input.idEmployee)
-          .input("idTache", sql.UniqueIdentifier, input.idTache)
+        await createRequest
+          .input("newSuiviId", sql.UniqueIdentifier, idsuivi)
+          .input("startTime", sql.DateTime2, startDate)
+          .input("empId", sql.UniqueIdentifier, input.idEmployee)
+          .input("taskId", sql.UniqueIdentifier, input.idTache)
           .query(`
             INSERT INTO SuiviDeTemp (
-              idsuivi, heure_debut_suivi, heure_fin_suivi, 
-              duree_suivi, idEmployee, idTache
+              idsuivi, heure_debut_suivi, idEmployee, idTache
             ) VALUES (
-              @idsuivi, @heure_debut_suivi, @heure_fin_suivi,
-              @duree_suivi, @idEmployee, @idTache
+              @newSuiviId, @startTime, @empId, @taskId
             )
           `);
 
         // Return created entry
-        const result = await new sql.Request(transaction)
-          .input('id', sql.UniqueIdentifier, idsuivi)
-          .query(`
+        const resultRequest = new sql.Request(transaction);
+        const result = await resultRequest
+          .input('resultSuiviId', sql.UniqueIdentifier, idsuivi)
+          .query<SuiviDeTempResult>(`
             SELECT 
               s.idsuivi, s.heure_debut_suivi, s.heure_fin_suivi, s.duree_suivi,
               s.idEmployee, s.idTache, e.nom_employee, e.email_employee,
@@ -395,191 +274,39 @@ export const suiviDeTempsResolvers = {
             LEFT JOIN Employee e ON s.idEmployee = e.idEmployee
             LEFT JOIN Tache t ON s.idTache = t.idTache
             LEFT JOIN Projet p ON t.idProjet = p.idProjet
-            WHERE s.idsuivi = @id
+            WHERE s.idsuivi = @resultSuiviId
           `);
 
         await transaction.commit();
+        return mapSuiviResult(result.recordset[0]);
 
-        const suivi = result.recordset[0];
-        return {
-          idsuivi: suivi.idsuivi,
-          heure_debut_suivi: suivi.heure_debut_suivi,
-          heure_fin_suivi: suivi.heure_fin_suivi,
-          duree_suivi: suivi.duree_suivi,
-          employee: {
-            idEmployee: suivi.idEmployee,
-            nomEmployee: suivi.nom_employee,
-            emailEmployee: suivi.email_employee
-          },
-          tache: {
-            idTache: suivi.idTache,
-            titreTache: suivi.titre_tache,
-            statutTache: suivi.statut_tache,
-            projet: suivi.idProjet ? {
-              idProjet: suivi.idProjet,
-              nomProjet: suivi.nom_projet,
-              statutProjet: suivi.statut_projet
-            } : null
-          }
-        };
       } catch (error) {
-        await transaction.rollback();
-        if (error instanceof UserInputError) {
-          throw error;
+        try {
+          await transaction.rollback();
+        } catch (rollbackError) {
+          console.error('Rollback failed:', rollbackError);
         }
+        
+        if (error instanceof UserInputError) throw error;
         handleDatabaseError(error, 'create time entry');
       }
     },
 
-    updateSuiviDeTemp: async (_: any, { id, input }: any, { pool }: any) => {
+    // Stop active time entry
+    stopActiveSuivi: async (_: any, { idEmployee }: { idEmployee: string }, { pool }: { pool: sql.ConnectionPool }) => {
       const transaction = new sql.Transaction(pool);
+      
       try {
         await transaction.begin();
 
-        // Verify entry exists
-        const entryCheck = await new sql.Request(transaction)
-          .input('id', sql.UniqueIdentifier, id)
-          .query('SELECT 1 FROM SuiviDeTemp WHERE idsuivi = @id');
-        
-        if (entryCheck.recordset.length === 0) {
-          throw new UserInputError("Time entry not found");
-        }
-
-        const request = new sql.Request(transaction)
-          .input("id", sql.UniqueIdentifier, id);
-        
-        let updates = [];
-        
-        // Validate and process updates
-        if (input.heure_debut_suivi) {
-          const startDate = new Date(input.heure_debut_suivi);
-          if (isNaN(startDate.getTime())) {
-            throw new UserInputError("Invalid start time format");
-          }
-          updates.push("heure_debut_suivi = @heure_debut_suivi");
-          request.input("heure_debut_suivi", sql.DateTime2, startDate);
-        }
-
-        if (input.heure_fin_suivi !== undefined) {
-          const endDate = input.heure_fin_suivi ? new Date(input.heure_fin_suivi) : null;
-          if (endDate && isNaN(endDate.getTime())) {
-            throw new UserInputError("Invalid end time format");
-          }
-          updates.push("heure_fin_suivi = @heure_fin_suivi");
-          request.input("heure_fin_suivi", endDate ? sql.DateTime2 : sql.NVarChar, endDate);
-        }
-
-        if (input.duree_suivi !== undefined) {
-          updates.push("duree_suivi = @duree_suivi");
-          request.input("duree_suivi", sql.Int, input.duree_suivi);
-        }
-
-        if (updates.length === 0) {
-          throw new UserInputError("No fields to update");
-        }
-
-        await request.query(`
-          UPDATE SuiviDeTemp
-          SET ${updates.join(", ")}
-          WHERE idsuivi = @id
-        `);
-
-        // Return updated entry
-        const result = await new sql.Request(transaction)
-          .input('id', sql.UniqueIdentifier, id)
-          .query(`
-            SELECT 
-              s.idsuivi, s.heure_debut_suivi, s.heure_fin_suivi, s.duree_suivi,
-              s.idEmployee, s.idTache, e.nom_employee, e.email_employee,
-              t.titre_tache, t.statut_tache, p.idProjet, p.nom_projet, p.statut_projet
-            FROM SuiviDeTemp s
-            LEFT JOIN Employee e ON s.idEmployee = e.idEmployee
-            LEFT JOIN Tache t ON s.idTache = t.idTache
-            LEFT JOIN Projet p ON t.idProjet = p.idProjet
-            WHERE s.idsuivi = @id
-          `);
-
-        await transaction.commit();
-
-        if (result.recordset.length === 0) {
-          throw new ApolloError("Time entry not found after update");
-        }
-
-        const suivi = result.recordset[0];
-        return {
-          idsuivi: suivi.idsuivi,
-          heure_debut_suivi: suivi.heure_debut_suivi,
-          heure_fin_suivi: suivi.heure_fin_suivi,
-          duree_suivi: suivi.duree_suivi,
-          employee: {
-            idEmployee: suivi.idEmployee,
-            nomEmployee: suivi.nom_employee,
-            emailEmployee: suivi.email_employee
-          },
-          tache: {
-            idTache: suivi.idTache,
-            titreTache: suivi.titre_tache,
-            statutTache: suivi.statut_tache,
-            projet: suivi.idProjet ? {
-              idProjet: suivi.idProjet,
-              nomProjet: suivi.nom_projet,
-              statutProjet: suivi.statut_projet
-            } : null
-          }
-        };
-      } catch (error) {
-        await transaction.rollback();
-        if (error instanceof UserInputError) {
-          throw error;
-        }
-        handleDatabaseError(error, 'update time entry');
-      }
-    },
-
-    deleteSuiviDeTemp: async (_: any, { id }: any, { pool }: any) => {
-      const transaction = new sql.Transaction(pool);
-      try {
-        await transaction.begin();
-
-        // First verify the entry exists
-        const entryCheck = await new sql.Request(transaction)
-          .input('id', sql.UniqueIdentifier, id)
-          .query('SELECT 1 FROM SuiviDeTemp WHERE idsuivi = @id');
-        
-        if (entryCheck.recordset.length === 0) {
-          throw new UserInputError("Time entry not found");
-        }
-
-        await new sql.Request(transaction)
-          .input("id", sql.UniqueIdentifier, id)
-          .query(`
-            DELETE FROM SuiviDeTemp
-            WHERE idsuivi = @id
-          `);
-
-        await transaction.commit();
-        return true;
-      } catch (error) {
-        await transaction.rollback();
-        if (error instanceof UserInputError) {
-          throw error;
-        }
-        handleDatabaseError(error, 'delete time entry');
-      }
-    },
-
-    stopActiveSuivi: async (_: any, { idEmployee }: any, { pool }: any) => {
-      const transaction = new sql.Transaction(pool);
-      try {
-        await transaction.begin();
-    
-        // Find active time entry
-        const activeEntry = await new sql.Request(transaction)
-          .input("idEmployee", sql.UniqueIdentifier, idEmployee)
-          .query(`
+        // Find active entry with new request
+        const findRequest = new sql.Request(transaction);
+        const activeEntry = await findRequest
+          .input("findEmpId", sql.UniqueIdentifier, idEmployee)
+          .query<{ idsuivi: string; heure_debut_suivi: string }>(`
             SELECT TOP 1 idsuivi, heure_debut_suivi 
             FROM SuiviDeTemp 
-            WHERE idEmployee = @idEmployee 
+            WHERE idEmployee = @findEmpId 
               AND heure_fin_suivi IS NULL
             ORDER BY heure_debut_suivi DESC
           `);
@@ -593,81 +320,93 @@ export const suiviDeTempsResolvers = {
           };
         }
     
+        // Calculate duration and update with new request
+        const updateRequest = new sql.Request(transaction);
         const idsuivi = activeEntry.recordset[0].idsuivi;
         const endTime = new Date();
-    
-        // Calculate duration
         const startTime = new Date(activeEntry.recordset[0].heure_debut_suivi);
         const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
     
-        // Update entry
-        await new sql.Request(transaction)
-          .input("id", sql.UniqueIdentifier, idsuivi)
-          .input("heure_fin_suivi", sql.DateTime2, endTime)
-          .input("duree_suivi", sql.Int, duration)
+        await updateRequest
+          .input("updateSuiviId", sql.UniqueIdentifier, idsuivi)
+          .input("endTime", sql.DateTime2, endTime)
+          .input("duration", sql.Int, duration)
           .query(`
             UPDATE SuiviDeTemp
-            SET heure_fin_suivi = @heure_fin_suivi, 
-                duree_suivi = @duree_suivi
-            WHERE idsuivi = @id
+            SET heure_fin_suivi = @endTime, 
+                duree_suivi = @duration
+            WHERE idsuivi = @updateSuiviId
           `);
     
-        // Get updated entry
-        const result = await new sql.Request(transaction)
-          .input('id', sql.UniqueIdentifier, idsuivi)
-          .query(`
+        // Return updated entry with new request
+        const resultRequest = new sql.Request(transaction);
+        const result = await resultRequest
+          .input('resultSuiviId', sql.UniqueIdentifier, idsuivi)
+          .query<SuiviDeTempResult>(`
             SELECT 
-              s.idsuivi,
-              s.heure_debut_suivi,
-              s.heure_fin_suivi,
-              s.duree_suivi,
-              s.idEmployee,
-              s.idTache,
-              e.nom_employee,
-              e.email_employee,
-              t.titre_tache,
-              t.statut_tache,
-              p.idProjet,
-              p.nom_projet,
-              p.statut_projet
+              s.idsuivi, s.heure_debut_suivi, s.heure_fin_suivi, s.duree_suivi,
+              s.idEmployee, s.idTache, e.nom_employee, e.email_employee,
+              t.titre_tache, t.statut_tache, p.idProjet, p.nom_projet, p.statut_projet
             FROM SuiviDeTemp s
             LEFT JOIN Employee e ON s.idEmployee = e.idEmployee
             LEFT JOIN Tache t ON s.idTache = t.idTache
             LEFT JOIN Projet p ON t.idProjet = p.idProjet
-            WHERE s.idsuivi = @id
+            WHERE s.idsuivi = @resultSuiviId
           `);
     
         await transaction.commit();
     
-        const suivi = result.recordset[0];
         return {
           success: true,
           message: "Time entry stopped successfully",
-          suivi: {
-            idsuivi: suivi.idsuivi,
-            heure_debut_suivi: suivi.heure_debut_suivi,
-            heure_fin_suivi: suivi.heure_fin_suivi,
-            duree_suivi: suivi.duree_suivi,
-            employee: {
-              idEmployee: suivi.idEmployee,
-              nomEmployee: suivi.nom_employee,
-              emailEmployee: suivi.email_employee
-            },
-            tache: {
-              idTache: suivi.idTache,
-              titreTache: suivi.titre_tache,
-              statutTache: suivi.statut_tache,
-              projet: suivi.idProjet ? {
-                idProjet: suivi.idProjet,
-                nomProjet: suivi.nom_projet,
-                statutProjet: suivi.statut_projet
-              } : null
-            }
-          }
+          suivi: mapSuiviResult(result.recordset[0])
         };
       } catch (error) {
-        await transaction.rollback();
+        try {
+          await transaction.rollback();
+        } catch (rollbackError) {
+          console.error('Rollback failed:', rollbackError);
+        }
         handleDatabaseError(error, 'stop active time entry');
+      }
+    },
+
+    // Delete time entry
+    deleteSuiviDeTemp: async (_: any, { id }: { id: string }, { pool }: { pool: sql.ConnectionPool }) => {
+      const transaction = new sql.Transaction(pool);
+      
+      try {
+        await transaction.begin();
+
+        // Verify entry exists with new request
+        const checkRequest = new sql.Request(transaction);
+        const entryCheck = await checkRequest
+          .input('checkSuiviId', sql.UniqueIdentifier, id)
+          .query('SELECT 1 FROM SuiviDeTemp WHERE idsuivi = @checkSuiviId');
+        
+        if (entryCheck.recordset.length === 0) {
+          throw new UserInputError("Time entry not found");
+        }
+    
+        // Delete entry with new request
+        const deleteRequest = new sql.Request(transaction);
+        await deleteRequest
+          .input("deleteSuiviId", sql.UniqueIdentifier, id)
+          .query(`
+            DELETE FROM SuiviDeTemp
+            WHERE idsuivi = @deleteSuiviId
+          `);
+    
+        await transaction.commit();
+        return true;
+      } catch (error) {
+        try {
+          await transaction.rollback();
+        } catch (rollbackError) {
+          console.error('Rollback failed:', rollbackError);
+        }
+        if (error instanceof UserInputError) throw error;
+        handleDatabaseError(error, 'delete time entry');
       }
     }
   }

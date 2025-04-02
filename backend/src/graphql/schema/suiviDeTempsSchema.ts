@@ -12,6 +12,19 @@ export const suiviDeTempTypeDefs = gql`
     tache: Tache
   }
 
+  type ActiveSuivi {
+    idsuivi: ID!
+    heureDebutSuivi: DateTimeISO!
+    tache: ActiveSuiviTache!
+  }
+
+  type ActiveSuiviTache {
+    idTache: ID!
+    idProjet: ID!
+    titreTache: String
+    nomProjet: String
+  }
+
   type StopSuiviPayload {
     success: Boolean!
     message: String
@@ -24,11 +37,11 @@ export const suiviDeTempTypeDefs = gql`
     employeeId: ID
     taskId: ID
     projectId: ID
+    isActive: Boolean
   }
 
   input CreateSuiviInput {
     heure_debut_suivi: DateTimeISO!
-    heure_fin_suivi: DateTimeISO
     idEmployee: ID!
     idTache: ID!
   }
@@ -55,6 +68,7 @@ export const suiviDeTempTypeDefs = gql`
   type Query {
     suivisDeTemp(filters: SuiviDeTempFilterInput): [SuiviDeTemp!]!
     suiviDeTemp(id: ID!): SuiviDeTemp
+    getActiveSuivi(employeeId: ID!): ActiveSuivi
     suiviStats(
       filters: SuiviDeTempFilterInput!
       groupBy: String!
