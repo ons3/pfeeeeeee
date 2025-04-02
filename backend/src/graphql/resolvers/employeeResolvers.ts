@@ -4,36 +4,16 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const employeeResolvers = {
   Query: {
-    employees: async (
-      parent: any,
-      args: any,
-      context: { pool: sql.ConnectionPool; user: any }
-    ) => {
-      const { pool, user } = context;
-      
-      if (!user || user.role !== 'admin') {
-        throw new Error("Non autorisé");
-      }
-
+    employees: async (_: any, __: any, { pool }: { pool: sql.ConnectionPool }) => {
       try {
         const result = await pool.request().query(`
-          SELECT 
-            idEmployee, 
-            nom_employee AS nomEmployee, 
-            email_employee AS emailEmployee, 
-            idEquipe, 
-            role
+          SELECT idEmployee, nom_employee, email_employee, role, idEquipe, disabledUntil
           FROM Employee
-          ORDER BY nom_employee
         `);
-
-        return {
-          message: "Employés récupérés avec succès",
-          employees: result.recordset,
-        };
+        return { employees: result.recordset };
       } catch (error) {
-        console.error("Erreur lors de la récupération des employés:", error);
-        throw new Error(`Database error: ${error instanceof Error ? error.message : String(error)}`);
+        console.error("Error fetching employees:", error);
+        throw new Error("Failed to fetch employees");
       }
     },
 
@@ -42,24 +22,27 @@ export const employeeResolvers = {
         const result = await pool.request()
           .input('id', sql.UniqueIdentifier, id)
           .query(`
-            SELECT 
-              idEmployee, 
-              nom_employee AS nomEmployee, 
-              email_employee AS emailEmployee, 
-              idEquipe, 
-              role
+            SELECT idEmployee, nom_employee, email_employee, idEquipe, role, disabledUntil
             FROM Employee
-            WHERE idEmployee = @id
+            WHERE idEmployee = @id;
           `);
 
         if (result.recordset.length === 0) {
           throw new Error("Employee not found");
         }
 
-        return result.recordset[0];
+        const employee = result.recordset[0];
+        return {
+          idEmployee: employee.idEmployee,
+          nomEmployee: employee.nom_employee,
+          emailEmployee: employee.email_employee,
+          idEquipe: employee.idEquipe,
+          role: employee.role,
+          disabledUntil: employee.disabledUntil
+        };
       } catch (error) {
         console.error("Error fetching employee:", error);
-        throw new Error(`Error fetching employee: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error("Error fetching employee");
       }
     },
 
@@ -70,16 +53,11 @@ export const employeeResolvers = {
     ) => {
       try {
         let query = `
-          SELECT 
-            idEmployee, 
-            nom_employee AS nomEmployee, 
-            email_employee AS emailEmployee, 
-            idEquipe, 
-            role
+          SELECT idEmployee, nom_employee, email_employee, idEquipe, role, disabledUntil
           FROM Employee
         `;
-        const conditions = [];
-        const inputs = [];
+        const conditions: string[] = [];
+        const inputs: any[] = [];
 
         if (filters?.nomEmployee) {
           conditions.push("nom_employee LIKE @nomEmployee");
@@ -101,11 +79,18 @@ export const employeeResolvers = {
         const result = await request.query(query);
         return {
           message: "Employees searched successfully",
-          employees: result.recordset,
+          employees: result.recordset.map((employee) => ({
+            idEmployee: employee.idEmployee,
+            nomEmployee: employee.nom_employee,
+            emailEmployee: employee.email_employee,
+            idEquipe: employee.idEquipe,
+            role: employee.role,
+            disabledUntil: employee.disabledUntil
+          })),
         };
       } catch (error) {
         console.error("Error searching employees:", error);
-        throw new Error(`Error searching employees: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error("Error searching employees");
       }
     }
   },
@@ -113,34 +98,21 @@ export const employeeResolvers = {
   Mutation: {
     createEmployee: async (
       _: any,
-      { nomEmployee, emailEmployee, passwordEmployee, idEquipe, role }: {
+      { nomEmployee, emailEmployee, passwordEmployee, idEquipe, role, disabledUntil }: {
         nomEmployee: string;
         emailEmployee: string;
         passwordEmployee: string;
         idEquipe?: string;
         role: string;
+        disabledUntil?: string;
       },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        if (!nomEmployee || !emailEmployee || !passwordEmployee || !role) {
-          throw new Error("Nom, email, password, and role are required");
-        }
-
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(passwordEmployee, saltRounds);
-        let idEmployee = uuidv4();
 
-        // Ensure unique UUID
-        let isUnique = false;
-        while (!isUnique) {
-          const result = await pool.request()
-            .input('id', sql.UniqueIdentifier, idEmployee)
-            .query(`SELECT 1 FROM Employee WHERE idEmployee = @id`);
-
-          if (result.recordset.length === 0) isUnique = true;
-          else idEmployee = uuidv4();
-        }
+        const idEmployee = uuidv4();
 
         await pool.request()
           .input('id', sql.UniqueIdentifier, idEmployee)
@@ -149,41 +121,36 @@ export const employeeResolvers = {
           .input('password', sql.VarChar, hashedPassword)
           .input('equipe', sql.UniqueIdentifier, idEquipe || null)
           .input('role', sql.VarChar, role)
+          .input('disabledUntil', sql.DateTime, disabledUntil ? new Date(disabledUntil) : null)
           .query(`
-            INSERT INTO Employee (idEmployee, nom_employee, email_employee, password_employee, idEquipe, role)
-            VALUES (@id, @nom, @email, @password, @equipe, @role)
+            INSERT INTO Employee (idEmployee, nom_employee, email_employee, password_employee, idEquipe, role, disabledUntil)
+            VALUES (@id, @nom, @email, @password, @equipe, @role, @disabledUntil);
           `);
 
-        // Return the created employee with consistent field names
-        const created = await pool.request()
-          .input('id', sql.UniqueIdentifier, idEmployee)
-          .query(`
-            SELECT 
-              idEmployee, 
-              nom_employee AS nomEmployee, 
-              email_employee AS emailEmployee, 
-              idEquipe, 
-              role
-            FROM Employee
-            WHERE idEmployee = @id
-          `);
-
-        return created.recordset[0];
+        return {
+          idEmployee,
+          nomEmployee,
+          emailEmployee,
+          idEquipe,
+          role,
+          disabledUntil: disabledUntil ? new Date(disabledUntil).toISOString() : null
+        };
       } catch (error) {
         console.error("Error creating employee:", error);
-        throw new Error(`Error creating employee: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error("Error creating employee");
       }
     },
 
     updateEmployee: async (
       _: any,
-      { id, nomEmployee, emailEmployee, passwordEmployee, idEquipe, role }: {
+      { id, nomEmployee, emailEmployee, passwordEmployee, idEquipe, role, disabledUntil }: {
         id: string;
         nomEmployee?: string;
         emailEmployee?: string;
         passwordEmployee?: string;
         idEquipe?: string;
         role?: string;
+        disabledUntil?: string;
       },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
@@ -218,38 +185,50 @@ export const employeeResolvers = {
           request.input('role', sql.VarChar, role);
         }
 
+        if (disabledUntil) {
+          updates.push('disabledUntil = @disabledUntil');
+          request.input('disabledUntil', sql.DateTime, new Date(disabledUntil));
+        } else {
+          updates.push('disabledUntil = NULL');
+        }
+
         if (updates.length === 0) {
           throw new Error("No updates provided");
         }
 
-        await request.query(`
+        const query = `
           UPDATE Employee
           SET ${updates.join(', ')}
-          WHERE idEmployee = @id
-        `);
+          WHERE idEmployee = @id;
+        `;
 
-        // Return updated employee with consistent field names
-        const updated = await pool.request()
+        await request.query(query);
+
+        const updatedEmployee = await pool.request()
           .input('id', sql.UniqueIdentifier, id)
           .query(`
-            SELECT 
-              idEmployee, 
-              nom_employee AS nomEmployee, 
-              email_employee AS emailEmployee, 
-              idEquipe, 
-              role
+            SELECT idEmployee, nom_employee, email_employee, idEquipe, role, disabledUntil
             FROM Employee
-            WHERE idEmployee = @id
+            WHERE idEmployee = @id;
           `);
 
-        if (updated.recordset.length === 0) {
+        if (updatedEmployee.recordset.length === 0) {
           throw new Error("Employee not found after update");
         }
 
-        return updated.recordset[0];
+        const employee = updatedEmployee.recordset[0];
+
+        return {
+          idEmployee: employee.idEmployee,
+          nomEmployee: employee.nom_employee,
+          emailEmployee: employee.email_employee,
+          idEquipe: employee.idEquipe,
+          role: employee.role,
+          disabledUntil: employee.disabledUntil
+        };
       } catch (error) {
         console.error("Error updating employee:", error);
-        throw new Error(`Error updating employee: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error("Error updating employee");
       }
     },
 
@@ -259,39 +238,14 @@ export const employeeResolvers = {
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        // First get the employee before deletion (optional)
-        const employee = await pool.request()
-          .input('id', sql.UniqueIdentifier, id)
-          .query(`
-            SELECT 
-              idEmployee, 
-              nom_employee AS nomEmployee
-            FROM Employee
-            WHERE idEmployee = @id
-          `);
-
-        if (employee.recordset.length === 0) {
-          throw new Error("Employee not found");
-        }
-
         await pool.request()
           .input('id', sql.UniqueIdentifier, id)
           .query(`DELETE FROM Employee WHERE idEmployee = @id`);
 
-        return { 
-          success: true, 
-          message: "Employee deleted successfully",
-          deletedEmployee: {
-            idEmployee: id,
-            nomEmployee: employee.recordset[0].nomEmployee
-          }
-        };
+        return { success: true, message: "Employee deleted successfully" };
       } catch (error) {
         console.error("Error deleting employee:", error);
-        return { 
-          success: false, 
-          message: `Error deleting employee: ${error instanceof Error ? error.message : String(error)}` 
-        };
+        return { success: false, message: "Error deleting employee" };
       }
     }
   }

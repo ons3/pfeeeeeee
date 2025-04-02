@@ -7,8 +7,12 @@ import { connectToDatabase, getPool } from './graphql/utils/dbConnection';
 import axios from 'axios';
 import querystring from 'querystring';
 import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
+console.log("Email User:", process.env.EMAIL_USER);
+console.log("Email Pass Exists:", Boolean(process.env.EMAIL_PASS));
+
 
 const app: Application = express();
 const port = process.env.PORT || 3000;
@@ -37,6 +41,59 @@ async function startServer() {
 }
 
 startServer();
+
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',      // Specify Gmail's SMTP server host
+  port: 465,                   // Secure SMTP port for Gmail
+  secure: true,                // Use TLS (secure connection)
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false, // To handle any certificate issues
+  },
+});
+
+/**
+ * 📧 Route to Send Emails
+ */
+app.post('/send-email', async (req: Request, res: Response) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const loginUrl = "https://yourwebsite.com/login"; // Change this URL
+
+    const mailOptions = {
+        from: `"Your Company" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: "Welcome to the Company! Your Login Credentials",
+        html: `
+            <h2>Welcome to Our System!</h2>
+            <p>Your login details:</p>
+            <ul>
+                <li><strong>Email:</strong> ${email}</li>
+                <li><strong>Password:</strong> ${password}</li>
+            </ul>
+            <p>Please change your password after logging in.</p>
+            <a href="${loginUrl}" 
+               style="display:inline-block;padding:10px 20px;color:#fff;background-color:#007bff;text-decoration:none;border-radius:5px;">
+               Login Now
+            </a>
+        `,
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Email sent successfully to ${email}`);
+        res.status(200).json({ message: `Email sent to ${email}` });
+    } catch (error) {
+        console.error("❌ Error sending email:", error);
+        res.status(500).json({ error: "Failed to send email" });
+    }
+});
 
 // OAuth Callback Route (returns token instead of setting a cookie)
 app.get('/callback', async (req: Request, res: Response) => {
@@ -70,6 +127,6 @@ app.get('/callback', async (req: Request, res: Response) => {
 app.get('/', (_req, res) => res.send('Server is running!'));
 
 app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
-  console.log(`GraphQL: http://localhost:${port}/graphql`);
+  console.log(`🚀 Server running on http://localhost:${port}`);
+  console.log(`🔗 GraphQL: http://localhost:${port}/graphql`);
 });
