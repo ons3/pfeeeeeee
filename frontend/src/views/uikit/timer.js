@@ -7,6 +7,7 @@ export const useTimer = () => {
 
     const startTimer = () => {
         if (!isRunning.value && !interval) {
+            console.log('Starting timer...');
             interval = setInterval(() => {
                 timer.value++;
             }, 1000);
@@ -16,6 +17,7 @@ export const useTimer = () => {
 
     const stopTimer = () => {
         if (interval) {
+            console.log('Stopping timer...');
             clearInterval(interval);
             interval = null;
             isRunning.value = false;
@@ -24,25 +26,26 @@ export const useTimer = () => {
 
     const pauseTimer = () => {
         if (isRunning.value && interval) {
+            console.log('Pausing timer...');
             clearInterval(interval);
             interval = null;
-            isRunning.value = false; // Ensure isRunning is set to false
-            console.log('Timer paused:', { timer: timer.value }); // Debugging log
+            isRunning.value = false;
         }
     };
 
     const resumeTimer = () => {
         if (!isRunning.value && !interval) {
+            console.log('Resuming timer...');
             interval = setInterval(() => {
                 timer.value++;
             }, 1000);
             isRunning.value = true;
-            console.log('Timer resumed:', { timer: timer.value }); // Debugging log
         }
     };
 
     const resetTimer = () => {
-        if (interval) stopTimer();
+        console.log('Resetting timer...');
+        stopTimer();
         timer.value = 0;
     };
 
@@ -55,13 +58,12 @@ export const useTimer = () => {
 
     watchEffect(() => {
         if (isRunning.value) {
-            document.title = `${formatTime(timer.value)} - ImbusFlow`;
+            document.title = `${formatTime(timer.value)} - Time Tracking`;
         } else {
-            document.title = 'ImbusFlow';
+            document.title = 'Time Tracking';
         }
     });
 
-    // Clean up interval when component unmounts
     onScopeDispose(() => {
         stopTimer();
     });

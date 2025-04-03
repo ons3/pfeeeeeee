@@ -17,7 +17,11 @@ export const SUIVIS_DE_TEMP = gql`
             heure_fin_suivi
             duree_suivi
             tache {
-                idTache
+                projet {
+        nom_projet
+        description_projet
+        statut_projet
+      }
                 titreTache
                 idProjet
             }

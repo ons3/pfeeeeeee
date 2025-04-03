@@ -277,4 +277,33 @@ export const tacheResolvers = {
       }
     },
   },
+
+  Tache: {
+    projet: async (parent: { idProjet: string }, _: any, { pool }: { pool: sql.ConnectionPool }) => {
+      if (!parent.idProjet) return null;
+
+      try {
+        const result = await pool.request()
+          .input("idProjet", sql.UniqueIdentifier, parent.idProjet)
+          .query(`
+            SELECT idProjet, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_projet
+            FROM Projet
+            WHERE idProjet = @idProjet
+          `);
+
+        if (result.recordset.length === 0) return null;
+
+        return {
+          idProjet: result.recordset[0].idProjet,
+          nom_projet: result.recordset[0].nom_projet,
+          description_projet: result.recordset[0].description_projet,
+          date_debut_projet: result.recordset[0].date_debut_projet,
+          date_fin_projet: result.recordset[0].date_fin_projet,
+          statut_projet: result.recordset[0].statut_projet
+        };
+      } catch (error) {
+        console.error("Error fetching project:", error);
+      }
+    }
+  }
 };

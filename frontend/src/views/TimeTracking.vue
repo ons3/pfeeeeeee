@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, watch, onMounted, defineAsyncComponent } from 'vue';
+import { ref, computed, watch, onMounted, defineAsyncComponent, watchEffect } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import { format, startOfWeek, endOfWeek, addWeeks, isToday } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addWeeks, isToday, differenceInSeconds } from 'date-fns';
 import { useQuery, useMutation } from '@vue/apollo-composable';
 import { SUIVIS_DE_TEMP, CREATE_SUIVI, STOP_ACTIVE_SUIVI, DELETE_SUIVI, GET_PROJECTS, GET_TACHES, GET_ACTIVE_SUIVI } from '@/graphql';
 import { useTimer } from '@/views/uikit/timer';
@@ -12,13 +12,13 @@ const Dialog = defineAsyncComponent(() => import('primevue/dialog'));
 
 // Constants
 const WEEK_START_DAY = 1; // Monday
-const EMPLOYEE_ID = '2c156683-2578-4e71-8463-2acaff034c09';
+const EMPLOYEE_ID = 'd94fd4b1-39ee-4f0f-a566-d1e87e128afd';
 const LOCAL_STORAGE_KEY = 'activeTimeTracking';
 const WEEKLY_GOAL_MINUTES = 40 * 60; // 40 hours in minutes
 
 // Composables
 const toast = useToast();
-const { timer, isRunning, startTimer, stopTimer, resetTimer: originalResetTimer, formatTime, pauseTimer, resumeTimer } = useTimer();
+const { timer, isRunning, startTimer: originalStartTimer, stopTimer, resetTimer: originalResetTimer, formatTime, pauseTimer, resumeTimer } = useTimer();
 
 // Component State
 const weekViewDate = ref(new Date());
@@ -90,20 +90,13 @@ const filteredTasks = computed(() => {
 
 const timeEntries = computed(() => {
     if (!timeEntriesResult.value?.suivisDeTemp) return [];
-
-    const projectMap = projects.value.reduce((acc, project) => {
-        acc[project.id] = project.name;
-        return acc;
-    }, {});
-
     return timeEntriesResult.value.suivisDeTemp.map((entry) => ({
-        id: entry.idsuivi,
+        id: entry.idsuivi || 'N/A',
         task: entry.tache?.titreTache || 'N/A',
-        project: projectMap[entry.tache?.idProjet] || 'N/A',
-        startTime: entry.heure_debut_suivi,
-        endTime: entry.heure_fin_suivi,
-        duration: entry.duree_suivi,
-        employee: entry.employee?.nomEmployee || 'N/A'
+        project: entry.tache?.projet?.nom_projet || 'N/A', // Ensure this is correct
+        startTime: entry.heure_debut_suivi || null,
+        endTime: entry.heure_fin_suivi || null,
+        duration: entry.duree_suivi || 0
     }));
 });
 
@@ -147,15 +140,42 @@ const weeklyHours = computed(() => {
 const isPaused = computed(() => !isRunning.value && timer.value > 0);
 
 // Methods
+let interval = null;
+
+const startTimer = () => {
+    if (!isRunning.value && !interval) {
+        console.log('Starting timer...'); // Debugging log
+        interval = setInterval(() => {
+            timer.value++;
+            console.log('Timer incremented:', timer.value); // Debugging log
+        }, 1000);
+        isRunning.value = true;
+    } else {
+        console.log('Timer is already running or interval exists'); // Debugging log
+    }
+};
+
+const executeMutation = async (mutation, variables, operation) => {
+    try {
+        const { data } = await mutation(variables);
+        return data;
+    } catch (error) {
+        handleError(error, operation);
+        throw error;
+    }
+};
+
 const handleProjectChange = () => {
-    selectedTask.value = null;
+    selectedTask.value = null; // Reset task when project changes
 };
 
 const handleTrackingAction = async () => {
-    console.log('Tracking action triggered');
+    console.log('Tracking action triggered'); // Debugging log
     if (isRunning.value) {
+        console.log('Stopping tracking...'); // Debugging log
         await stopTracking();
     } else {
+        console.log('Starting tracking...'); // Debugging log
         await startTracking();
     }
 };
@@ -166,49 +186,53 @@ const startTracking = async () => {
         return;
     }
 
-    try {
-        const { data } = await createTimeEntry({
-            input: {
-                heure_debut_suivi: new Date().toISOString(),
-                idEmployee: EMPLOYEE_ID,
-                idTache: selectedTask.value.id
-            }
-        });
+    const input = {
+        heure_debut_suivi: new Date().toISOString(),
+        idEmployee: EMPLOYEE_ID,
+        idTache: selectedTask.value.id
+    };
 
+    try {
+        console.log('Starting tracking with input:', input);
+        const { data } = await createTimeEntry({ input });
         if (!data?.createSuiviDeTemp?.idsuivi) {
             throw new Error('Invalid response from server');
         }
-
+        console.log('Tracking started successfully:', data);
         showSuccess('Tracking started');
-        startTimer();
-        await refetchTimeEntries();
+        isRunning.value = true;
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+            timer: timer.value,
+            isRunning: true,
+            pausedAt: null
+        }));
+        startTimer(); // Start the timer
     } catch (error) {
-        handleGqlError(error, 'start tracking');
+        console.error('Error in startTracking:', error);
+        handleError(error, 'start tracking');
     }
 };
 
 const stopTracking = async () => {
-    console.log('Stop Tracking button clicked'); // Debugging log
+    console.log('Stopping tracking...');
     try {
         loading.value = true;
-        const { data } = await stopActiveTracking({
-            idEmployee: EMPLOYEE_ID
-        });
+        const data = await executeMutation(stopActiveTracking, { idEmployee: EMPLOYEE_ID }, 'stop tracking');
 
         if (data?.stopActiveSuivi?.success) {
-            console.log('Stop tracking mutation succeeded:', data); // Debugging log
+            console.log('Stop tracking mutation succeeded:', data);
             showSuccess(data.stopActiveSuivi.message);
-            localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear the saved state
-            stopTimer(); // Stop the timer
-            resetTimer(); // Reset the timer value
-            showResumeNotice.value = false;
-            await refetchTimeEntries(); // Refresh the time entries
+            localStorage.removeItem(LOCAL_STORAGE_KEY);
+            stopTimer();
+            resetTimer();
+            isRunning.value = false;
+            await refetchTimeEntries();
         } else {
-            console.error('Stop tracking mutation failed:', data); // Debugging log
+            console.error('Stop tracking mutation failed:', data);
             showError('Failed to stop tracking. Please try again.');
         }
     } catch (error) {
-        console.error('Error during stop tracking:', error); // Debugging log
+        console.error('Error during stop tracking:', error);
         showError('An error occurred while stopping tracking.');
     } finally {
         loading.value = false;
@@ -223,6 +247,7 @@ const pauseTimerAction = () => {
     try {
         loading.value = true;
         pauseTimer(); // Pause the timer
+        isRunning.value = false; // Set the running state to false
         showSuccess('Timer paused');
 
         // Save the timer state to localStorage
@@ -246,6 +271,7 @@ const resumeTimerAction = () => {
     try {
         loading.value = true;
         resumeTimer(); // Resume the timer
+        isRunning.value = true; // Set the running state to true
         showSuccess('Timer resumed');
 
         // Save the timer state to localStorage
@@ -264,6 +290,7 @@ const resumeTimerAction = () => {
 const resetTimer = () => {
     stopTimer(); // Stop the timer
     timer.value = 0; // Reset the timer value
+    isRunning.value = false; // Ensure the timer is not running
     localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear the saved state
     showSuccess('Timer reset');
 };
@@ -276,11 +303,11 @@ const confirmDelete = (entry) => {
 const deleteEntry = async () => {
     try {
         isDeletingLoading.value = true;
-        await deleteTimeEntry({ id: activeEntry.value.id });
+        await executeMutation(deleteTimeEntry, { id: activeEntry.value.id }, 'delete entry');
         showSuccess('Entry deleted successfully');
         await refetchTimeEntries();
     } catch (error) {
-        handleGqlError(error, 'delete entry');
+        console.error('Error during delete entry:', error);
     } finally {
         isDeletingLoading.value = false;
         showDeleteDialog.value = false;
@@ -304,69 +331,68 @@ const retryFetch = async () => {
     try {
         await refetchTimeEntries();
     } catch (error) {
-        handleGqlError(error, 'retry fetch');
+        handleError(error, 'retry fetch');
     }
 };
 
 // Resume Logic
 const resumeTracking = (startTime, taskId, projectId) => {
-    const now = new Date();
-    const start = new Date(startTime);
+    try {
+        const now = new Date();
+        const start = new Date(startTime);
 
-    // Validate the start time
-    if (isNaN(start.getTime())) {
-        console.error('Invalid start time format:', startTime);
-        return;
+        if (isNaN(start.getTime())) {
+            throw new Error(`Invalid start time format: ${startTime}`);
+        }
+
+        const elapsedSeconds = differenceInSeconds(now, start);
+
+        timer.value = elapsedSeconds;
+        startTimer();
+        resumedSessionStart.value = startTime;
+        showResumeNotice.value = true;
+
+        const task = tasks.value.find((t) => t.id === taskId);
+        if (!task) {
+            console.warn(`Task with ID ${taskId} not found`);
+        } else {
+            selectedTask.value = task;
+        }
+
+        const project = projects.value.find((p) => p.id === projectId);
+        if (!project) {
+            console.warn(`Project with ID ${projectId} not found`);
+        } else {
+            selectedProject.value = project;
+        }
+
+        toast.add({
+            severity: 'info',
+            summary: 'Session Resumed',
+            detail: `Continuing from ${formatDateTime(startTime)}`,
+            life: 5000
+        });
+    } catch (error) {
+        console.error('Error in resumeTracking:', error.message);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to resume tracking. Please try again.',
+            life: 5000
+        });
     }
-
-    const elapsedSeconds = differenceInSeconds(now, start);
-
-    timer.value = elapsedSeconds;
-    startTimer();
-    resumedSessionStart.value = startTime;
-    showResumeNotice.value = true;
-
-    // Auto-select the previous task/project
-    const task = tasks.value.find((t) => t.id === taskId);
-    if (task) {
-        selectedTask.value = task;
-        selectedProject.value = projects.value.find((p) => p.id === projectId);
-    }
-
-    toast.add({
-        severity: 'info',
-        summary: 'Session Resumed',
-        detail: `Continuing from ${formatDateTime(startTime)}`,
-        life: 5000
-    });
 };
 
 // Initialize
 onMounted(() => {
-    try {
-        const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (savedState) {
-            const { timer: savedTimer, isRunning: savedIsRunning, pausedAt } = JSON.parse(savedState);
-
-            // Restore the timer value
-            timer.value = savedTimer || 0;
-
-            // Restore the running/paused state
-            if (savedIsRunning) {
-                startTimer(); // Resume the timer if it was running
-            } else if (pausedAt) {
-                pauseTimer(); // Keep the timer paused
-                showResumeNotice.value = true;
-                toast.add({
-                    severity: 'info',
-                    summary: 'Session Paused',
-                    detail: `Timer paused at ${formatDateTime(pausedAt)}`,
-                    life: 5000
-                });
-            }
+    const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (savedState) {
+        const { timer: savedTimer, isRunning: savedIsRunning } = JSON.parse(savedState);
+        console.log('Restoring state:', { savedTimer, savedIsRunning });
+        timer.value = savedTimer || 0;
+        if (savedIsRunning) {
+            startTimer();
         }
-    } catch (error) {
-        console.error('Failed to restore timer state:', error);
     }
 
     // Handle active entry restoration (if applicable)
@@ -400,10 +426,14 @@ const showSuccess = (message) => {
     toast.add({ severity: 'success', summary: 'Success', detail: message, life: 3000 });
 };
 
-const handleGqlError = (error, operation) => {
-    console.error(`Error during ${operation}:`, error);
-    const message = error.message?.replace('GraphQL error: ', '') || 'An unexpected error occurred';
-    showError(message);
+const handleError = (error, operation) => {
+    const userFriendlyMessage = {
+        'start tracking': 'Failed to start tracking. Please try again.',
+        'delete entry': 'Failed to delete the entry. Please try again.',
+        'retry fetch': 'Failed to fetch data. Please check your connection.'
+    };
+    const message = userFriendlyMessage[operation] || 'An unexpected error occurred';
+    toast.add({ severity: 'error', summary: 'Error', detail: message, life: 5000 });
 };
 
 const formatDate = (date, formatString = 'yyyy-MM-dd') => {
@@ -466,6 +496,14 @@ watch(totalWeekMinutes, (newVal) => {
 
 watch([isRunning, timer], ([newIsRunning, newTimer]) => {
     console.log('isRunning:', newIsRunning, 'timer:', newTimer);
+});
+
+watchEffect(() => {
+    if (isRunning.value) {
+        document.title = `${formatTime(timer.value)} - Time Tracking`;
+    } else {
+        document.title = 'Time Tracking';
+    }
 });
 </script>
 
@@ -558,6 +596,7 @@ watch([isRunning, timer], ([newIsRunning, newTimer]) => {
                                 icon="pi pi-refresh"
                                 severity="danger"
                                 @click="showResetDialog = true"
+                                tooltip="Reset the timer to 00:00:00"
                             />
                             <Button type="button" label="Export to CSV" icon="pi pi-file" class="p-button-success" @click="exportToCSV" />
                             <div class="current-timer">
@@ -617,7 +656,7 @@ watch([isRunning, timer], ([newIsRunning, newTimer]) => {
                     <DataTable
                         :value="timeEntries"
                         :paginator="true"
-                        :rows="10"
+                        :rows="5"
                         :loading="entriesLoading"
                         paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport"
                         currentPageReportTemplate="Showing {first} to {last} of {totalRecords} entries"
@@ -655,39 +694,27 @@ watch([isRunning, timer], ([newIsRunning, newTimer]) => {
         </div>
 
         <!-- Delete Confirmation Dialog -->
-        <Dialog v-model:visible="showDeleteDialog" header="Confirm Delete" :modal="true" :style="{ width: '450px' }">
-            <div class="confirmation-content">
-                <i class="pi pi-exclamation-triangle p-mr-3" style="font-size: 2rem" />
-                <span>Are you sure you want to delete this time entry?</span>
-            </div>
-            <template #footer>
-                <Button label="Cancel" icon="pi pi-times" @click="showDeleteDialog = false" class="p-button-text" />
-                <Button label="Delete" icon="pi pi-check" @click="deleteEntry" class="p-button-danger" autofocus />
-            </template>
-        </Dialog>
+        <ConfirmationDialog
+            v-model:visible="showDeleteDialog"
+            header="Confirm Delete"
+            message="Are you sure you want to delete this time entry?"
+            :onCancel="() => (showDeleteDialog = false)"
+            :onConfirm="deleteEntry"
+        />
 
         <!-- Reset Confirmation Dialog -->
-        <Dialog v-model:visible="showResetDialog" header="Confirm Reset" :modal="true" :style="{ width: '450px' }">
-            <div class="confirmation-content">
-                <i class="pi pi-exclamation-triangle p-mr-3" style="font-size: 2rem" />
-                <span>Are you sure you want to reset the timer?</span>
-            </div>
-            <template #footer>
-                <Button label="Cancel" icon="pi pi-times" @click="showResetDialog = false" class="p-button-text" />
-                <Button
-                    label="Reset"
-                    icon="pi pi-check"
-                    @click="
-                        () => {
-                            resetTimer();
-                            showResetDialog = false;
-                        }
-                    "
-                    class="p-button-danger"
-                    autofocus
-                />
-            </template>
-        </Dialog>
+        <ConfirmationDialog
+            v-model:visible="showResetDialog"
+            header="Confirm Reset"
+            message="Are you sure you want to reset the timer?"
+            :onCancel="() => (showResetDialog = false)"
+            :onConfirm="
+                () => {
+                    resetTimer();
+                    showResetDialog = false;
+                }
+            "
+        />
     </div>
 </template>
 
