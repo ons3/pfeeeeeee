@@ -6,7 +6,7 @@ const config = {
   password: 'Ons17082001',
 
   server: 'localhost',
-  database: 'pfe_test',
+  database: 'time_tracking',
   options: {
     encrypt: true, // Use encryption if required
     trustServerCertificate: true, // Change to true for local development
