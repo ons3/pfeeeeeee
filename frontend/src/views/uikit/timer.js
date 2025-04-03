@@ -22,8 +22,27 @@ export const useTimer = () => {
         }
     };
 
+    const pauseTimer = () => {
+        if (isRunning.value && interval) {
+            clearInterval(interval);
+            interval = null;
+            isRunning.value = false; // Ensure isRunning is set to false
+            console.log('Timer paused:', { timer: timer.value }); // Debugging log
+        }
+    };
+
+    const resumeTimer = () => {
+        if (!isRunning.value && !interval) {
+            interval = setInterval(() => {
+                timer.value++;
+            }, 1000);
+            isRunning.value = true;
+            console.log('Timer resumed:', { timer: timer.value }); // Debugging log
+        }
+    };
+
     const resetTimer = () => {
-        stopTimer();
+        if (interval) stopTimer();
         timer.value = 0;
     };
 
@@ -53,6 +72,8 @@ export const useTimer = () => {
         startTimer,
         stopTimer,
         resetTimer,
-        formatTime
+        formatTime,
+        pauseTimer,
+        resumeTimer
     };
 };
