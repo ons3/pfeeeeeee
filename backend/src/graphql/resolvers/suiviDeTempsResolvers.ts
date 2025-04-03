@@ -82,9 +82,10 @@ const mapSuiviResult = (row: SuiviDeTempResult) => ({
     idTache: row.idTache,
     titreTache: row.titre_tache,
     statutTache: row.statut_tache,
+    idProjet: row.idProjet, // Include idProjet
     projet: row.idProjet ? {
       idProjet: row.idProjet,
-      nomProjet: row.nom_projet,
+      nom_projet: row.nom_projet || 'N/A',
       statutProjet: row.statut_projet
     } : null
   }
@@ -94,14 +95,14 @@ export const suiviDeTempsResolvers = {
   DateTimeISO,
   
   Query: {
-    // Get time entries with filtering capabilities
     suivisDeTemp: async (_: any, { filters = {} }: any, { pool }: { pool: sql.ConnectionPool }) => {
       try {
         let query = `
           SELECT 
             s.idsuivi, s.heure_debut_suivi, s.heure_fin_suivi, s.duree_suivi,
             s.idEmployee, s.idTache, e.nom_employee, e.email_employee,
-            t.titre_tache, t.statut_tache, p.idProjet, p.nom_projet, p.statut_projet
+            t.titre_tache, t.statut_tache, t.idProjet, -- Include idProjet
+            COALESCE(p.nom_projet, 'N/A') AS nom_projet, p.statut_projet
           FROM SuiviDeTemp s
           LEFT JOIN Employee e ON s.idEmployee = e.idEmployee
           LEFT JOIN Tache t ON s.idTache = t.idTache
@@ -111,7 +112,6 @@ export const suiviDeTempsResolvers = {
         const conditions: string[] = [];
         const request = pool.request();
 
-        // Dynamic filtering
         if (filters.startDate) {
           conditions.push("CONVERT(DATE, s.heure_debut_suivi) >= CONVERT(DATE, @startDate)");
           request.input("startDate", sql.DateTime, new Date(filters.startDate));
@@ -152,7 +152,6 @@ export const suiviDeTempsResolvers = {
         const result = await request.query<SuiviDeTempResult>(query);
         return result.recordset.map(mapSuiviResult);
       } catch (error) {
-        if (error instanceof UserInputError) throw error;
         handleDatabaseError(error, 'fetch time entries');
       }
     },
@@ -269,12 +268,12 @@ export const suiviDeTempsResolvers = {
             SELECT 
               s.idsuivi, s.heure_debut_suivi, s.heure_fin_suivi, s.duree_suivi,
               s.idEmployee, s.idTache, e.nom_employee, e.email_employee,
-              t.titre_tache, t.statut_tache, p.idProjet, p.nom_projet, p.statut_projet
+              t.titre_tache, t.statut_tache, t.idProjet, -- Include idProjet
+              COALESCE(p.nom_projet, 'N/A') AS nom_projet, p.statut_projet
             FROM SuiviDeTemp s
             LEFT JOIN Employee e ON s.idEmployee = e.idEmployee
             LEFT JOIN Tache t ON s.idTache = t.idTache
             LEFT JOIN Projet p ON t.idProjet = p.idProjet
-            WHERE s.idsuivi = @resultSuiviId
           `);
 
         await transaction.commit();
@@ -346,12 +345,12 @@ export const suiviDeTempsResolvers = {
             SELECT 
               s.idsuivi, s.heure_debut_suivi, s.heure_fin_suivi, s.duree_suivi,
               s.idEmployee, s.idTache, e.nom_employee, e.email_employee,
-              t.titre_tache, t.statut_tache, p.idProjet, p.nom_projet, p.statut_projet
+              t.titre_tache, t.statut_tache, t.idProjet, -- Include idProjet
+              COALESCE(p.nom_projet, 'N/A') AS nom_projet, p.statut_projet
             FROM SuiviDeTemp s
             LEFT JOIN Employee e ON s.idEmployee = e.idEmployee
             LEFT JOIN Tache t ON s.idTache = t.idTache
             LEFT JOIN Projet p ON t.idProjet = p.idProjet
-            WHERE s.idsuivi = @resultSuiviId
           `);
     
         await transaction.commit();
@@ -407,6 +406,38 @@ export const suiviDeTempsResolvers = {
         }
         if (error instanceof UserInputError) throw error;
         handleDatabaseError(error, 'delete time entry');
+      }
+    }
+  }
+};
+
+export const tacheResolvers = {
+  Tache: {
+    projet: async (parent: { idProjet: string }, _: any, { pool }: { pool: sql.ConnectionPool }) => {
+      if (!parent.idProjet) return null;
+
+      try {
+        const result = await pool.request()
+          .input("idProjet", sql.UniqueIdentifier, parent.idProjet)
+          .query(`
+            SELECT idProjet, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_projet
+            FROM Projet
+            WHERE idProjet = @idProjet
+          `);
+
+        if (result.recordset.length === 0) return null;
+
+        return {
+          idProjet: result.recordset[0].idProjet,
+          nom_projet: result.recordset[0].nom_projet,
+          description_projet: result.recordset[0].description_projet,
+          date_debut_projet: result.recordset[0].date_debut_projet,
+          date_fin_projet: result.recordset[0].date_fin_projet,
+          statut_projet: result.recordset[0].statut_projet
+        };
+      } catch (error) {
+        console.error("Error fetching project:", error);
+        throw new ApolloError("Failed to fetch project");
       }
     }
   }
