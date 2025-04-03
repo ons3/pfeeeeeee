@@ -1,19 +1,32 @@
 import sql from 'mssql';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
+import nodemailer from 'nodemailer';
+import axios from 'axios';
+
+const fetchEmployees = async (pool: sql.ConnectionPool) => {
+  try {
+    const result = await pool.request().query(`
+      SELECT idEmployee, nom_employee, email_employee, role, idEquipe, disabledUntil
+      FROM Employee
+    `);
+
+    return result.recordset; // Return the employees directly
+  } catch (error) {
+    console.error('Error fetching employees:', error);
+    throw new Error('Failed to fetch employees');
+  }
+};
 
 export const employeeResolvers = {
   Query: {
     employees: async (_: any, __: any, { pool }: { pool: sql.ConnectionPool }) => {
       try {
-        const result = await pool.request().query(`
-          SELECT idEmployee, nom_employee, email_employee, role, idEquipe, disabledUntil
-          FROM Employee
-        `);
-        return { employees: result.recordset };
+        const employees = await fetchEmployees(pool);
+        return { employees };
       } catch (error) {
-        console.error("Error fetching employees:", error);
-        throw new Error("Failed to fetch employees");
+        console.error('Error fetching employees:', error);
+        throw new Error('Failed to fetch employees');
       }
     },
 
@@ -143,88 +156,58 @@ export const employeeResolvers = {
 
     updateEmployee: async (
       _: any,
-      { id, nomEmployee, emailEmployee, passwordEmployee, idEquipe, role, disabledUntil }: {
-        id: string;
-        nomEmployee?: string;
-        emailEmployee?: string;
-        passwordEmployee?: string;
-        idEquipe?: string;
-        role?: string;
-        disabledUntil?: string;
-      },
+      { id, nomEmployee, emailEmployee, role, idEquipe, disabledUntil }: { id: string; nomEmployee?: string; emailEmployee?: string; role?: string; idEquipe?: string; disabledUntil?: string },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        const request = pool.request().input('id', sql.UniqueIdentifier, id);
-        const updates: string[] = [];
-
-        if (nomEmployee) {
-          updates.push('nom_employee = @nomEmployee');
-          request.input('nomEmployee', sql.VarChar, nomEmployee);
-        }
-
-        if (emailEmployee) {
-          updates.push('email_employee = @emailEmployee');
-          request.input('emailEmployee', sql.VarChar, emailEmployee);
-        }
-
-        if (passwordEmployee) {
-          const saltRounds = 10;
-          const hashedPassword = await bcrypt.hash(passwordEmployee, saltRounds);
-          updates.push('password_employee = @passwordEmployee');
-          request.input('passwordEmployee', sql.VarChar, hashedPassword);
-        }
-
-        if (idEquipe) {
-          updates.push('idEquipe = @idEquipe');
-          request.input('idEquipe', sql.UniqueIdentifier, idEquipe);
-        }
-
-        if (role) {
-          updates.push('role = @role');
-          request.input('role', sql.VarChar, role);
-        }
-
-        if (disabledUntil) {
-          updates.push('disabledUntil = @disabledUntil');
-          request.input('disabledUntil', sql.DateTime, new Date(disabledUntil));
-        } else {
-          updates.push('disabledUntil = NULL');
-        }
-
-        if (updates.length === 0) {
-          throw new Error("No updates provided");
-        }
-
-        const query = `
-          UPDATE Employee
-          SET ${updates.join(', ')}
-          WHERE idEmployee = @id;
-        `;
-
-        await request.query(query);
-
-        const updatedEmployee = await pool.request()
+        // Fetch the current employee data
+        const currentEmployeeResult = await pool.request()
           .input('id', sql.UniqueIdentifier, id)
           .query(`
-            SELECT idEmployee, nom_employee, email_employee, idEquipe, role, disabledUntil
+            SELECT nom_employee, email_employee, role, idEquipe, disabledUntil
             FROM Employee
             WHERE idEmployee = @id;
           `);
 
-        if (updatedEmployee.recordset.length === 0) {
-          throw new Error("Employee not found after update");
+        if (currentEmployeeResult.recordset.length === 0) {
+          throw new Error("Employee not found");
         }
 
-        const employee = updatedEmployee.recordset[0];
+        const currentEmployee = currentEmployeeResult.recordset[0];
 
+        // Use existing values for fields that are not provided in the mutation
+        const updatedNomEmployee = nomEmployee ?? currentEmployee.nom_employee;
+        const updatedEmailEmployee = emailEmployee ?? currentEmployee.email_employee;
+        const updatedRole = role ?? currentEmployee.role;
+        const updatedIdEquipe = idEquipe ?? currentEmployee.idEquipe;
+        const updatedDisabledUntil = disabledUntil !== undefined ? new Date(disabledUntil) : currentEmployee.disabledUntil;
+
+        // Perform the update
+        await pool.request()
+          .input('id', sql.UniqueIdentifier, id)
+          .input('nomEmployee', sql.VarChar, updatedNomEmployee)
+          .input('emailEmployee', sql.VarChar, updatedEmailEmployee)
+          .input('role', sql.VarChar, updatedRole)
+          .input('idEquipe', sql.UniqueIdentifier, updatedIdEquipe)
+          .input('disabledUntil', sql.DateTime, updatedDisabledUntil)
+          .query(`
+            UPDATE Employee
+            SET nom_employee = @nomEmployee,
+                email_employee = @emailEmployee,
+                role = @role,
+                idEquipe = @idEquipe,
+                disabledUntil = @disabledUntil
+            WHERE idEmployee = @id;
+          `);
+
+        // Return the updated employee
         return {
-          idEmployee: employee.idEmployee,
-          nomEmployee: employee.nom_employee,
-          emailEmployee: employee.email_employee,
-          idEquipe: employee.idEquipe,
-          role: employee.role,
-          disabledUntil: employee.disabledUntil
+          idEmployee: id,
+          nomEmployee: updatedNomEmployee,
+          emailEmployee: updatedEmailEmployee,
+          role: updatedRole,
+          idEquipe: updatedIdEquipe,
+          disabledUntil: updatedDisabledUntil,
         };
       } catch (error) {
         console.error("Error updating employee:", error);
@@ -247,6 +230,53 @@ export const employeeResolvers = {
         console.error("Error deleting employee:", error);
         return { success: false, message: "Error deleting employee" };
       }
-    }
-  }
+    },
+
+    sendEmailToEmployee: async (
+      _: any,
+      { id, subject, message }: { id: string; subject: string; message: string },
+      { pool }: { pool: sql.ConnectionPool }
+    ) => {
+      try {
+        // Fetch the employee's email from the database
+        const result = await pool.request()
+          .input('id', sql.UniqueIdentifier, id)
+          .query(`
+            SELECT email_employee
+            FROM Employee
+            WHERE idEmployee = @id
+          `);
+
+        if (result.recordset.length === 0) {
+          throw new Error('Employee not found');
+        }
+
+        const employeeEmail = result.recordset[0].email_employee;
+        console.log(`Employee email: ${employeeEmail}`); // Debugging log
+
+        // Configure the email transporter
+        const transporter = nodemailer.createTransport({
+          service: 'gmail', // Use your email service provider
+          auth: {
+            user: 'onssbenamara3@gmail.com', // Replace with your email
+            pass: 'gnxj idgf trax kliq', // Replace with your email password or app-specific password
+          },
+        });
+
+        // Send the email
+        const info = await transporter.sendMail({
+          from: 'onssbenamara3@gmail.com', // Replace with your email
+          to: employeeEmail,
+          subject,
+          text: message,
+        });
+
+        console.log(`Email sent: ${info.response}`); // Debugging log
+        return true;
+      } catch (error) {
+        console.error('Error sending email:', error);
+        throw new Error('Failed to send email');
+      }
+    },
+  },
 };

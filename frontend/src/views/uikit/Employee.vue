@@ -7,6 +7,7 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
+import Calendar from 'primevue/calendar';
 import axios from 'axios';
 
 const toast = useToast();
@@ -17,6 +18,7 @@ const editEmployeeDialog = ref(false);
 const deleteEmployeeDialog = ref(false);
 const disableEmployeeDialog = ref(false);
 const resetPasswordDialog = ref(false); // Dialog for password reset
+const sendEmailDialog = ref(false); // Dialog for sending email
 const employee = ref({});
 const submitted = ref(false);
 const searchQuery = ref(''); // Search bar query
@@ -24,6 +26,16 @@ const employeeToDelete = ref(null);
 const disabledUntil = ref(null);
 const newPassword = ref('');
 const emailForReset = ref(''); // Email to be used for reset
+const emailSubject = ref(''); // Email subject
+const emailMessage = ref(''); // Email message
+const selectedEmployeeId = ref(null); // Selected employee ID for sending email
+const disableDialogVisible = ref(false); // Dialog visibility for setting disabled until
+const selectedDisabledUntil = ref(null); // Selected date for disabling employee
+const selectedEmployees = ref([]); // Array to store selected employees
+const loading = ref(false); // Loading state
+const filters = ref({
+  global: { value: '' }
+}); // Filters for DataTable
 
 // Fetch employees
 const fetchTaches = async () => {
@@ -134,6 +146,8 @@ const updateEmployee = async () => {
     toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
     return;
   }
+
+  console.log('Updating Employee:', employee.value);
 
   try {
     const mutation = `
@@ -285,6 +299,7 @@ const sendResetPasswordEmail = async () => {
 
 // Open edit dialog
 const openEdit = (emp) => {
+  console.log('Editing Employee:', emp);
   employee.value = { ...emp }; // Populate the employee object with the selected employee's data
   submitted.value = false; // Reset the submitted state
   editEmployeeDialog.value = true; // Open the edit dialog
@@ -292,16 +307,99 @@ const openEdit = (emp) => {
 
 
 // Open disable dialog
-const openDisableDialog = (emp) => {
-  employee.value = emp; // Set the selected employee
-  disabledUntil.value = ''; // Reset the disabledUntil field
-  disableEmployeeDialog.value = true; // Open the dialog
+const openDisableDialog = (employee) => {
+  selectedEmployeeId.value = employee.idEmployee;
+  selectedDisabledUntil.value = null; // Reset the date
+  disableDialogVisible.value = true;
+};
+
+const setDisabledUntil = async () => {
+  if (!selectedDisabledUntil.value) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please select a date', life: 3000 });
+    return;
+  }
+
+  try {
+    const mutation = `
+      mutation UpdateEmployee($id: String!, $disabledUntil: String) {
+        updateEmployee(id: $id, disabledUntil: $disabledUntil) {
+          idEmployee
+          disabledUntil
+        }
+      }
+    `;
+
+    const variables = {
+      id: selectedEmployeeId.value,
+      disabledUntil: selectedDisabledUntil.value.toISOString(),
+    };
+
+    const response = await axios.post('http://localhost:3000/graphql', {
+      query: mutation,
+      variables,
+    });
+
+    if (response.data.errors) {
+      throw new Error(response.data.errors[0].message);
+    }
+
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Disabled Until date set successfully', life: 3000 });
+    disableDialogVisible.value = false;
+
+    // Refetch the employee list
+    await fetchTaches();
+  } catch (error) {
+    console.error('Error setting Disabled Until:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to set Disabled Until date', life: 3000 });
+  }
 };
 
 // Confirm delete employee
 const confirmDeleteEmployee = (emp) => {
   employeeToDelete.value = emp; // Store the employee to be deleted
   deleteEmployeeDialog.value = true; // Open the delete confirmation dialog
+};
+
+// Open send email dialog
+const openSendEmailDialog = (employeeId) => {
+  selectedEmployeeId.value = employeeId;
+  emailSubject.value = '';
+  emailMessage.value = '';
+  sendEmailDialog.value = true;
+};
+
+const confirmDeleteSelected = () => {
+    deleteProjectsDialog.value = true;
+    deleteSelectedProjects(); // Call the function to delete selected projects
+};
+const exportCSV = () => {
+    dt.value.exportCSV();
+};
+
+// Delete selected projects
+const deleteSelectedProjects = async () => {
+    try {
+        const deletePromises = selectedProjects.value.map((proj) => deleteProjetMutation({ id: proj.idProjet }));
+        await Promise.all(deletePromises);
+        await refetchProjects();
+        toast.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Selected projects deleted successfully',
+            life: 3000
+        });
+    } catch (error) {
+        console.error('Error deleting projects:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: error.message || 'Failed to delete selected projects',
+            life: 3000
+        });
+    } finally {
+        deleteProjectsDialog.value = false;
+        selectedProjects.value = [];
+    }
 };
 
 // Hide all dialogs
@@ -311,7 +409,40 @@ const hideDialog = () => {
   deleteEmployeeDialog.value = false;
   disableEmployeeDialog.value = false;
   resetPasswordDialog.value = false;
+  sendEmailDialog.value = false;
   submitted.value = false;
+};
+
+// Confirm delete selected employees
+const confirmDeleteSelectedEmployees = async () => {
+  console.log('Selected Employees:', selectedEmployees.value); // Debugging
+  if (!selectedEmployees.value.length) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'No employees selected', life: 3000 });
+    return;
+  }
+
+  try {
+    const deletePromises = selectedEmployees.value.map(emp => {
+      const mutation = `
+        mutation DeleteEmployee($id: String!) {
+          deleteEmployee(id: $id) {
+            success
+            message
+          }
+        }
+      `;
+      const variables = { id: emp.idEmployee };
+      return axios.post('http://localhost:3000/graphql', { query: mutation, variables });
+    });
+
+    await Promise.all(deletePromises);
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Selected employees deleted successfully', life: 3000 });
+    selectedEmployees.value = []; // Clear the selection
+    fetchTaches(); // Refresh the employee list
+  } catch (error) {
+    console.error('Error deleting employees:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete selected employees', life: 3000 });
+  }
 };
 
 onMounted(() => {
@@ -324,30 +455,68 @@ onMounted(() => {
     <div class="card">
       <Toolbar class="mb-4">
         <template #start>
-          <Button label="New" icon="pi pi-plus" class="p-button-success" @click="openNew" />
+          <Button label="New" icon="pi pi-plus" class="mr-2" @click="openNew" />
+          <Button 
+            label="Delete" 
+            icon="pi pi-trash" 
+            severity="danger" 
+            @click="confirmDeleteSelectedEmployees" 
+            :disabled="!selectedEmployees.length" 
+          />
         </template>
         <template #end>
-          <InputText v-model="searchQuery" placeholder="Search by name..." class="p-inputtext-sm p-mr-2" />
+          <Button label="Export" icon="pi pi-upload" @click="exportCSV" />
         </template>
       </Toolbar>
 
-      <DataTable :value="filteredEmployees" ref="dt" paginator :rows="10" class="p-datatable-gridlines">
-        <Column field="idEmployee" header="ID" />
-        <Column field="nomEmployee" header="Name" />
-        <Column field="emailEmployee" header="Email" />
-        <Column field="role" header="Role" />
-        <Column field="disabledUntil" header="Disabled Until">
-            <template #body="{ data }">
-                {{ data.disabledUntil ? new Date(data.disabledUntil).toLocaleDateString('en-US') : 'Active' }}
-            </template>
-        </Column>
+      <DataTable
+        ref="dt"
+        v-model:selection="selectedEmployees"
+        :value="filteredEmployees"
+        :loading="loading"
+        dataKey="idEmployee"
+        :paginator="true"
+        :rows="10"
+        :filters="filters"
+        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+        :rowsPerPageOptions="[5, 10, 25]"
+        currentPageReportTemplate="Showing {first} to {last} of {totalRecords} employees"
+      >
+        <template #loading>
+          <div class="flex align-items-center">
+            <ProgressSpinner style="width: 30px; height: 30px" />
+            <span class="ml-2">Loading employees...</span>
+          </div>
+        </template>
 
-        <Column header="Actions">
+        <template #header>
+          <div class="flex flex-wrap gap-2 align-items-center justify-content-between">
+            <h4 class="m-0">Manage Employees</h4>
+            <IconField iconPosition="left">
+              <InputIcon>
+                <i class="pi pi-search" />
+              </InputIcon>
+              <InputText v-model="searchQuery" placeholder="Search by name..." class="p-inputtext-sm p-mr-2" />
+
+            </IconField>
+          </div>
+        </template>
+
+        <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
+        <Column field="nomEmployee" header="Name" sortable></Column>
+        <Column field="emailEmployee" header="Email" sortable></Column>
+        <Column field="role" header="Role" sortable></Column>
+        <Column field="disabledUntil" header="Disabled Until" sortable>
           <template #body="{ data }">
-            <Button icon="pi pi-pencil" class="p-button-rounded p-button-warning p-mr-2" @click="openEdit(data)" />
-            <Button icon="pi pi-lock" class="p-button-rounded p-button-secondary p-mr-2" @click="openDisableDialog(data)" />
-            <Button icon="pi pi-trash" class="p-button-rounded p-button-danger p-mr-2" @click="confirmDeleteEmployee(data)" />
-            <Button icon="pi pi-envelope" class="p-button-rounded p-button-info" @click="openResetPasswordDialog(data)" />
+            {{ data.disabledUntil ? new Date(data.disabledUntil).toLocaleDateString('en-US') : 'Active' }}
+          </template>
+        </Column>
+        <Column header="Actions" headerStyle="width: 14rem">
+          <template #body="{ data }">
+            <Button icon="pi pi-envelope" class="mr-2" outlined @click="openSendEmailDialog(data.idEmployee)" />
+            <Button icon="pi pi-calendar" class="mr-2" outlined @click="openDisableDialog(data)" />
+            <Button icon="pi pi-pencil" class="mr-2" outlined @click="openEdit(data)" />
+            <Button icon="pi pi-trash" severity="danger" outlined @click="confirmDeleteEmployee(data)" />
           </template>
         </Column>
       </DataTable>
@@ -432,30 +601,62 @@ onMounted(() => {
         </div>
       </div>
 
-      
       <template #footer>
         <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="hideDialog" />
-        <Button label="Disable" icon="pi pi-check" class="p-button-text" @click="disableEmployee" />
+        <Button label="Disable" icon="pi pi-check" class="p-button-danger" @click="disableEmployee" />
       </template>
     </Dialog>
            
+    <!-- Delete Employee Dialog -->
     <!-- Delete Employee Dialog -->
     <Dialog v-model:visible="deleteEmployeeDialog" header="Confirm" modal class="p-dialog-responsive" :style="{ width: '30%' }">
       <div class="confirmation-content">
         <i class="pi pi-exclamation-triangle" style="font-size: 2rem"></i>
         <span>Are you sure you want to delete <b>{{ employeeToDelete?.nomEmployee }}</b>?</span>
       </div>
-         
+
       <template #footer>
-        <Button label="No" icon="pi pi-times" class="p-button-text" @click="hideDialog" />
-        <Button label="Yes" icon="pi pi-check" class="p-button-text" @click="deleteEmployee" />
+        <Button label="No" icon="pi pi-times" @click="deleteEmployeeDialog = false" class="p-button-text" />
+        <Button label="Yes" icon="pi pi-check" @click="deleteEmployee" :loading="loading" class="p-button-danger" />
+      </template>
+    </Dialog>
+
+    <!-- Send Email Dialog -->
+    <Dialog v-model:visible="sendEmailDialog" header="Send Email" :modal="true" :style="{ width: '500px' }">
+      <div class="field">
+        <label for="subject" class="font-bold block mb-2">Subject</label>
+        <InputText id="subject" v-model="emailSubject" class="w-full" placeholder="Enter email subject" />
+      </div>
+      <div class="field">
+        <label for="message" class="font-bold block mb-2">Message</label>
+        <Textarea id="message" v-model="emailMessage" class="w-full" rows="5" placeholder="Enter email message"></Textarea>
+      </div>
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="sendEmailDialog = false" />
+        <Button label="Send" icon="pi pi-send" class="p-button" @click="sendEmail" />
+      </template>
+    </Dialog>
+
+    <!-- Set Disabled Until Dialog -->
+    <Dialog v-model:visible="disableDialogVisible" header="Set Disabled Until" :modal="true" :style="{ width: '400px' }">
+      <div class="field">
+        <label for="disabledUntil" class="font-bold block mb-2">Disabled Until</label>
+        <Calendar 
+          id="disabledUntil" 
+          v-model="selectedDisabledUntil" 
+          :showIcon="true" 
+          class="w-full" 
+          placeholder="Select a date" 
+          dateFormat="yy-mm-dd" 
+        />
+      </div>
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="disableDialogVisible = false" />
+        <Button label="Save" icon="pi pi-check" class="p-button" @click="setDisabledUntil" />
       </template>
     </Dialog>
   </div>
 </template>
-
-
-
 
 <style scoped>
 .employee-page {

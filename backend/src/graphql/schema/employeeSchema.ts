@@ -62,5 +62,14 @@ type Employee {
     ): Employee
 
     deleteEmployee(id: String!): DeleteEmployeeResponse
+
+    sendEmailToEmployee(
+      id: String!,
+      subject: String!,
+      message: String!
+    ): Boolean
+
+    sendInvitation(id: String!): Boolean
+    acceptInvitation(token: String!): Boolean
   }
 `;
