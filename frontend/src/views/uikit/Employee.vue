@@ -497,7 +497,6 @@ onMounted(() => {
                 <i class="pi pi-search" />
               </InputIcon>
               <InputText v-model="searchQuery" placeholder="Search by name..." class="p-inputtext-sm p-mr-2" />
-
             </IconField>
           </div>
         </template>
@@ -513,10 +512,11 @@ onMounted(() => {
         </Column>
         <Column header="Actions" headerStyle="width: 14rem">
           <template #body="{ data }">
-            <Button icon="pi pi-envelope" class="mr-2" outlined @click="openSendEmailDialog(data.idEmployee)" />
-            <Button icon="pi pi-calendar" class="mr-2" outlined @click="openDisableDialog(data)" />
-            <Button icon="pi pi-pencil" class="mr-2" outlined @click="openEdit(data)" />
-            <Button icon="pi pi-trash" severity="danger" outlined @click="confirmDeleteEmployee(data)" />
+            <Button icon="pi pi-pencil" class="mr-2" severity="warning" outlined @click="openEdit(data)" />
+            <Button icon="pi pi-trash"  class="mr-2" severity="danger" outlined @click="confirmDeleteEmployee(data)" />
+            <Button icon="pi pi-envelope" class="mr-2" severity="info" outlined @click="openSendEmailDialog(data.idEmployee)" />
+            <Button icon="pi pi-calendar" class="mr-2" severity="secondary" outlined @click="openDisableDialog(data)" />
+           
           </template>
         </Column>
       </DataTable>
@@ -540,8 +540,8 @@ onMounted(() => {
       </div>
 
       <template #footer>
-        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="hideDialog" />
-        <Button label="Save" icon="pi pi-check" class="p-button-text" @click="saveEmployee" />
+        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text" @click="hideDialog" />
+        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text" @click="saveEmployee" />
       </template>
     </Dialog>
 
@@ -563,8 +563,8 @@ onMounted(() => {
       </div>
 
       <template #footer>
-        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="hideDialog" />
-        <Button label="Save" icon="pi pi-check" class="p-button-text" @click="updateEmployee" />
+        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text" @click="hideDialog" />
+        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text" @click="updateEmployee" />
       </template>
     </Dialog>
 
