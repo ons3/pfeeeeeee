@@ -10,8 +10,12 @@ export const useTimer = () => {
             console.log('Starting timer...');
             interval = setInterval(() => {
                 timer.value++;
+                localStorage.setItem('timerState', JSON.stringify({ timer: timer.value, isRunning: true })); // Save state
+                console.log('Timer incremented:', timer.value); // Debugging log
             }, 1000);
             isRunning.value = true;
+        } else {
+            console.warn('Timer is already running or interval exists'); // Debugging log
         }
     };
 
@@ -30,6 +34,9 @@ export const useTimer = () => {
             clearInterval(interval);
             interval = null;
             isRunning.value = false;
+            localStorage.setItem('timerState', JSON.stringify({ timer: timer.value, isRunning: false })); // Save state
+        } else {
+            console.warn('Timer is not running or already paused'); // Debugging log
         }
     };
 
@@ -38,15 +45,12 @@ export const useTimer = () => {
             console.log('Resuming timer...');
             interval = setInterval(() => {
                 timer.value++;
+                console.log('Timer incremented:', timer.value); // Debugging log
             }, 1000);
             isRunning.value = true;
+        } else {
+            console.warn('Timer is already running or interval exists'); // Debugging log
         }
-    };
-
-    const resetTimer = () => {
-        console.log('Resetting timer...');
-        stopTimer();
-        timer.value = 0;
     };
 
     const formatTime = (seconds) => {
@@ -73,7 +77,6 @@ export const useTimer = () => {
         isRunning,
         startTimer,
         stopTimer,
-        resetTimer,
         formatTime,
         pauseTimer,
         resumeTimer
