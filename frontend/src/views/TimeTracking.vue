@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, defineAsyncComponent } from 'vue';
+import { ref, computed, watch, watchEffect, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { format, startOfWeek, endOfWeek, addWeeks, isToday, differenceInSeconds } from 'date-fns'; // Add differenceInSeconds here
 import { useQuery, useMutation } from '@vue/apollo-composable';
@@ -199,6 +199,7 @@ const stopTracking = async () => {
             showSuccess(data.stopActiveSuivi.message);
             localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear the saved state
             stopTimer(); // Stop the timer
+            timer.value = 0; // Reset the timer value
             showResumeNotice.value = false;
             await refetchTimeEntries(); // Refresh the time entries
         } else {
@@ -332,49 +333,47 @@ const resumeTracking = (startTime, taskId, projectId) => {
     });
 };
 
-// Initialize
-onMounted(() => {
+// Helpers
+const restoreTimerState = () => {
     try {
         const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (savedState) {
-            const { timer: savedTimer, isRunning: savedIsRunning, pausedAt } = JSON.parse(savedState);
-
-            // Restore the timer value
-            timer.value = savedTimer || 0;
-
-            // Restore the running/paused state
-            if (savedIsRunning) {
-                startTimer(); // Resume the timer if it was running
-            } else if (pausedAt) {
-                pauseTimer(); // Keep the timer paused
-                showResumeNotice.value = true;
-                toast.add({
-                    severity: 'info',
-                    summary: 'Session Paused',
-                    detail: `Timer paused at ${formatDateTime(pausedAt)}`,
-                    life: 5000
-                });
+            const { timer: savedTimer, isRunning: savedIsRunning } = JSON.parse(savedState);
+            if (typeof savedTimer === 'number' && typeof savedIsRunning === 'boolean') {
+                timer.value = savedTimer || 0;
+                if (savedIsRunning) {
+                    resumeTimer();
+                }
+            } else {
+                clearTimerState(); // Clear invalid state
             }
         }
     } catch (error) {
         console.error('Failed to restore timer state:', error);
+        clearTimerState();
     }
+};
 
-    // Handle active entry restoration (if applicable)
+// Initialize
+onMounted(() => {
+    restoreTimerState(); // Restore timer state from localStorage
+
     onActiveEntryResult((result) => {
         if (result.data?.getActiveSuivi) {
             const activeEntry = result.data.getActiveSuivi;
             resumeTracking(activeEntry.heureDebutSuivi, activeEntry.tache.idTache, activeEntry.tache.idProjet);
         } else {
-            // Clear localStorage if no active session is found in the database
-            if (localStorage.getItem(LOCAL_STORAGE_KEY)) {
-                localStorage.removeItem(LOCAL_STORAGE_KEY);
-            }
+            stopTimer(); // Ensure the timer is stopped
         }
     });
+
+    window.addEventListener('beforeunload', stopTimer);
 });
 
-// Helpers
+onUnmounted(() => {
+    window.removeEventListener('beforeunload', stopTimer);
+});
+
 const isSameDay = (date1, date2) => {
     return format(date1, 'yyyy-MM-dd') === format(date2, 'yyyy-MM-dd');
 };
@@ -427,7 +426,7 @@ const debouncedRefetch = debounce(() => {
     refetchTimeEntries();
 }, 300);
 
-watch(weekViewDate, () => {
+watchEffect(() => {
     debouncedRefetch();
 });
 
@@ -497,7 +496,7 @@ watch([isRunning, timer], ([newIsRunning, newTimer]) => {
                                     optionLabel="name"
                                     placeholder="Select Project"
                                     :filter="true"
-                                    :disabled="isRunning || timer > 0"
+                                    :disabled="isRunning"
                                     class="dropdown"
                                     @change="handleProjectChange"
                                 />
@@ -510,7 +509,7 @@ watch([isRunning, timer], ([newIsRunning, newTimer]) => {
                                     :options="filteredTasks"
                                     optionLabel="title"
                                     placeholder="Select Task"
-                                    :disabled="!selectedProject || isRunning || timer > 0"
+                                    :disabled="!selectedProject || isRunning"
                                     class="dropdown"
                                 />
                             </div>
@@ -523,8 +522,7 @@ watch([isRunning, timer], ([newIsRunning, newTimer]) => {
                                 :icon="isRunning ? 'pi pi-stop' : 'pi pi-play'"
                                 :severity="isRunning ? 'danger' : 'success'"
                                 @click="handleTrackingAction"
-                                :disabled="!selectedTask || isPaused || loading"
-                                :tooltip="isPaused ? 'Cannot start tracking while the timer is paused. Resume or reset the timer first.' : ''"
+                                :disabled="!selectedTask || loading"
                                 class="track-button"
                             />
                             <Button
@@ -570,17 +568,15 @@ watch([isRunning, timer], ([newIsRunning, newTimer]) => {
                     </div>
                 </template>
                 <template #content>
-                    <ProgressBar :value="((totalWeekMinutes / WEEKLY_GOAL_MINUTES) * 100).toFixed(2)" class="weekly-progress-bar" />
+                    <ProgressBar :value="(totalWeekMinutes / WEEKLY_GOAL_MINUTES) * 100" class="weekly-progress-bar" />
                     <div class="week-days">
                         <div v-for="day in weeklyHours" :key="day.date" class="day-card" :class="{ 'active-day': isToday(day.date) }">
                             <h4>{{ formatDate(day.date, 'EEE') }}</h4>
                             <p class="day-total">{{ Math.floor(day.minutes / 60) }}h {{ day.minutes % 60 }}m</p>
-                            <!-- Display hours and minutes -->
                             <div class="day-entries">
                                 <div v-for="entry in day.entries" :key="entry.id" class="entry-item">
                                     <span class="entry-task">{{ entry.task }}</span>
                                     <span class="entry-duration">{{ entry.minutes }}m</span>
-                                    <!-- Display entry duration in minutes -->
                                 </div>
                                 <div v-if="day.entries.length === 0" class="no-entries">
                                     <i class="pi pi-info-circle"></i>

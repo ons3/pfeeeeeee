@@ -1,5 +1,7 @@
 import { ref, watchEffect, onScopeDispose } from 'vue';
 
+const LOCAL_STORAGE_KEY = 'activeTimeTracking';
+
 export const useTimer = () => {
     const timer = ref(0); // Time in seconds
     const isRunning = ref(false);
@@ -10,12 +12,9 @@ export const useTimer = () => {
             console.log('Starting timer...');
             interval = setInterval(() => {
                 timer.value++;
-                localStorage.setItem('timerState', JSON.stringify({ timer: timer.value, isRunning: true })); // Save state
-                console.log('Timer incremented:', timer.value); // Debugging log
+                saveTimerState();
             }, 1000);
             isRunning.value = true;
-        } else {
-            console.warn('Timer is already running or interval exists'); // Debugging log
         }
     };
 
@@ -25,6 +24,8 @@ export const useTimer = () => {
             clearInterval(interval);
             interval = null;
             isRunning.value = false;
+            timer.value = 0; // Reset timer
+            clearTimerState();
         }
     };
 
@@ -34,9 +35,7 @@ export const useTimer = () => {
             clearInterval(interval);
             interval = null;
             isRunning.value = false;
-            localStorage.setItem('timerState', JSON.stringify({ timer: timer.value, isRunning: false })); // Save state
-        } else {
-            console.warn('Timer is not running or already paused'); // Debugging log
+            saveTimerState();
         }
     };
 
@@ -45,12 +44,35 @@ export const useTimer = () => {
             console.log('Resuming timer...');
             interval = setInterval(() => {
                 timer.value++;
-                console.log('Timer incremented:', timer.value); // Debugging log
+                saveTimerState();
             }, 1000);
             isRunning.value = true;
-        } else {
-            console.warn('Timer is already running or interval exists'); // Debugging log
         }
+    };
+
+    const saveTimerState = () => {
+        localStorage.setItem(
+            LOCAL_STORAGE_KEY,
+            JSON.stringify({
+                timer: timer.value,
+                isRunning: isRunning.value,
+            })
+        );
+    };
+
+    const restoreTimerState = () => {
+        const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (savedState) {
+            const { timer: savedTimer, isRunning: savedIsRunning } = JSON.parse(savedState);
+            timer.value = savedTimer || 0;
+            if (savedIsRunning) {
+                resumeTimer();
+            }
+        }
+    };
+
+    const clearTimerState = () => {
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
     };
 
     const formatTime = (seconds) => {
@@ -61,11 +83,7 @@ export const useTimer = () => {
     };
 
     watchEffect(() => {
-        if (isRunning.value) {
-            document.title = `${formatTime(timer.value)} - Time Tracking`;
-        } else {
-            document.title = 'Time Tracking';
-        }
+        document.title = isRunning.value ? `${formatTime(timer.value)} - Time Tracking` : 'Time Tracking';
     });
 
     onScopeDispose(() => {
@@ -77,8 +95,9 @@ export const useTimer = () => {
         isRunning,
         startTimer,
         stopTimer,
-        formatTime,
         pauseTimer,
-        resumeTimer
+        resumeTimer,
+        restoreTimerState,
+        formatTime,
     };
 };
