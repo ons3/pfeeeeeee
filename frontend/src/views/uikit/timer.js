@@ -1,5 +1,7 @@
 import { ref, watchEffect, onScopeDispose } from 'vue';
 
+const LOCAL_STORAGE_KEY = 'activeTimeTracking';
+
 export const useTimer = () => {
     const timer = ref(0); // Time in seconds
     const isRunning = ref(false);
@@ -7,8 +9,10 @@ export const useTimer = () => {
 
     const startTimer = () => {
         if (!isRunning.value && !interval) {
+            console.log('Starting timer...');
             interval = setInterval(() => {
                 timer.value++;
+                saveTimerState();
             }, 1000);
             isRunning.value = true;
         }
@@ -16,15 +20,59 @@ export const useTimer = () => {
 
     const stopTimer = () => {
         if (interval) {
+            console.log('Stopping timer...');
             clearInterval(interval);
             interval = null;
             isRunning.value = false;
+            timer.value = 0; // Reset timer
+            clearTimerState();
         }
     };
 
-    const resetTimer = () => {
-        stopTimer();
-        timer.value = 0;
+    const pauseTimer = () => {
+        if (isRunning.value && interval) {
+            console.log('Pausing timer...');
+            clearInterval(interval);
+            interval = null;
+            isRunning.value = false;
+            saveTimerState();
+        }
+    };
+
+    const resumeTimer = () => {
+        if (!isRunning.value && !interval) {
+            console.log('Resuming timer...');
+            interval = setInterval(() => {
+                timer.value++;
+                saveTimerState();
+            }, 1000);
+            isRunning.value = true;
+        }
+    };
+
+    const saveTimerState = () => {
+        localStorage.setItem(
+            LOCAL_STORAGE_KEY,
+            JSON.stringify({
+                timer: timer.value,
+                isRunning: isRunning.value,
+            })
+        );
+    };
+
+    const restoreTimerState = () => {
+        const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (savedState) {
+            const { timer: savedTimer, isRunning: savedIsRunning } = JSON.parse(savedState);
+            timer.value = savedTimer || 0;
+            if (savedIsRunning) {
+                resumeTimer();
+            }
+        }
+    };
+
+    const clearTimerState = () => {
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
     };
 
     const formatTime = (seconds) => {
@@ -35,14 +83,9 @@ export const useTimer = () => {
     };
 
     watchEffect(() => {
-        if (isRunning.value) {
-            document.title = `${formatTime(timer.value)} - ImbusFlow`;
-        } else {
-            document.title = 'ImbusFlow';
-        }
+        document.title = isRunning.value ? `${formatTime(timer.value)} - Time Tracking` : 'Time Tracking';
     });
 
-    // Clean up interval when component unmounts
     onScopeDispose(() => {
         stopTimer();
     });
@@ -52,7 +95,9 @@ export const useTimer = () => {
         isRunning,
         startTimer,
         stopTimer,
-        resetTimer,
-        formatTime
+        pauseTimer,
+        resumeTimer,
+        restoreTimerState,
+        formatTime,
     };
 };

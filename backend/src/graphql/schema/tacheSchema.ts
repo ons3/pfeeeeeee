@@ -16,6 +16,7 @@ export const tacheTypeDefs = gql`
     statutTache: TaskStatus
     duration: Int
     idProjet: String
+    projet: Projet
   }
 
   input TacheFilterInput {
