@@ -7,6 +7,7 @@ type Employee {
   idEmployee: String!
   nomEmployee: String!
   emailEmployee: String!
+  passwordEmployee: String
   idEquipe: String
   role: String!
   equipe: Equipe

@@ -9,7 +9,6 @@ import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
 import Calendar from 'primevue/calendar';
 import axios from 'axios';
-
 const toast = useToast();
 const dt = ref();
 const taches = ref([]);
@@ -47,6 +46,7 @@ const fetchTaches = async () => {
             idEmployee
             nomEmployee
             emailEmployee
+            passwordEmployee
             role
             disabledUntil
           }
@@ -60,36 +60,33 @@ const fetchTaches = async () => {
         ...emp,
         disabledUntil: emp.disabledUntil ? new Date(emp.disabledUntil) : null
       }));
-    } else {
-      throw new Error('Invalid response structure');
-    }
-  } catch (error) {
-    console.error("Error fetching employees:", error);
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load employees', life: 3000 });
-  }
+} else {
+throw new Error('Invalid response structure');
+}
+} catch (error) {
+console.error("Error fetching employees:", error);
+toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load employees', life: 3000 });
+}
 };
-
 // Filter employees based on search query
 const filteredEmployees = computed(() => {
-  return taches.value.filter(emp =>
-    emp.nomEmployee.toLowerCase().includes(searchQuery.value.toLowerCase())
-  );
+return taches.value.filter(emp =>
+emp.nomEmployee.toLowerCase().includes(searchQuery.value.toLowerCase())
+);
 });
-
 // Open the "Add Employee" dialog
 const openNew = () => {
-  employee.value = {}; // Reset the employee object
-  submitted.value = false; // Reset the submitted state
-  addEmployeeDialog.value = true; // Open the dialog
+employee.value = {}; // Reset the employee object
+submitted.value = false; // Reset the submitted state
+addEmployeeDialog.value = true; // Open the dialog
 };
-
 // Save the new employee
 const saveEmployee = async () => {
-  submitted.value = true;
-
-  if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role) {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
-    return;
+submitted.value = true;
+if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role ||
+!employee.value.passwordEmployee) {
+toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
+return;
   }
 
   try {
@@ -115,42 +112,37 @@ const saveEmployee = async () => {
     const variables = {
       nomEmployee: employee.value.nomEmployee,
       emailEmployee: employee.value.emailEmployee,
-      passwordEmployee: "defaultPassword123", // Replace with a default or user-provided password
+      passwordEmployee: employee.value.passwordEmployee, // Include the password
       idEquipe: employee.value.idEquipe || null,
       role: employee.value.role,
     };
 
     const response = await axios.post('http://localhost:3000/graphql', {
-      query: mutation,
-      variables,
-    });
-
-    if (response.data.errors) {
-      throw new Error(response.data.errors[0].message);
-    }
-
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee added successfully', life: 3000 });
-    addEmployeeDialog.value = false; // Close the dialog
-    fetchTaches(); // Refresh the employee list
-  } catch (error) {
-    const errorMessage = error.response?.data?.errors?.[0]?.message || 'Failed to add employee';
-    toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 3000 });
-  }
+query: mutation,
+variables,
+});
+if (response.data.errors) {
+throw new Error(response.data.errors[0].message);
+}
+toast.add({ severity: 'success', summary: 'Success', detail: 'Employee added successfully', life: 3000
+});
+addEmployeeDialog.value = false; // Close the dialog
+fetchTaches(); // Refresh the employee list
+} catch (error) {
+const errorMessage = error.response?.data?.errors?.[0]?.message || 'Failed to add employee';
+toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 3000 });
+}
 };
-
 // Update the employee
 const updateEmployee = async () => {
-  submitted.value = true;
-
-  if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role) {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
-    return;
-  }
-
-  console.log('Updating Employee:', employee.value);
-
-  try {
-    const mutation = `
+submitted.value = true;
+if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role) {
+toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
+return;
+}
+console.log('Updating Employee:', employee.value);
+try {
+const mutation = `
       mutation UpdateEmployee(
         $id: String!,
         $nomEmployee: String,
@@ -186,7 +178,8 @@ const updateEmployee = async () => {
       throw new Error(response.data.errors[0].message);
     }
 
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee updated successfully', life: 3000 });
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee updated successfully', life:
+3000 });
     editEmployeeDialog.value = false; // Close the dialog
     fetchTaches(); // Refresh the employee list
   } catch (error) {
@@ -219,7 +212,8 @@ const deleteEmployee = async () => {
       throw new Error(response.data.errors[0].message);
     }
 
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee deleted successfully', life: 3000 });
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee deleted successfully', life:
+3000 });
     deleteEmployeeDialog.value = false; // Close the dialog
     fetchTaches(); // Refresh the employee list
   } catch (error) {
@@ -258,7 +252,8 @@ const disableEmployee = async () => {
       throw new Error(response.data.errors[0].message);
     }
 
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee disabled successfully', life: 3000 });
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee disabled successfully', life:
+3000 });
     disableEmployeeDialog.value = false; // Close the dialog
     fetchTaches(); // Refresh the employee list
   } catch (error) {
@@ -272,36 +267,32 @@ const disableEmployee = async () => {
 const openResetPasswordDialog = (emp) => {
   employee.value = emp;
   emailForReset.value = emp.emailEmployee; // Set the email for reset
-  newPassword.value = ''; // Reset the new password field
-  resetPasswordDialog.value = true; // Open the reset password dialog
+newPassword.value = ''; // Reset the new password field
+resetPasswordDialog.value = true; // Open the reset password dialog
 };
-
-
 // Send reset password email (mutation)
 const sendResetPasswordEmail = async () => {
-  if (!newPassword.value) {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please enter a new password', life: 3000 });
-    return;
-  }
-
-  try {
-    const response = await axios.post('http://localhost:3000/send-email', {
-      email: emailForReset.value,
-      password: newPassword.value,
-    });
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Password reset email sent', life: 3000 });
-    resetPasswordDialog.value = false;
-  } catch (error) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to send password reset email', life: 3000 });
-  }
+if (!newPassword.value) {
+toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please enter a new password', life: 3000 });
+return;
+}
+try {
+const response = await axios.post('http://localhost:3000/send-email', {
+email: emailForReset.value,
+password: newPassword.value,
+});
+toast.add({ severity: 'success', summary: 'Success', detail: 'Password reset email sent', life: 3000 });
+resetPasswordDialog.value = false;
+} catch (error) {
+toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to send password reset email', life:
+3000 });
+}
 };
-
-
 // Open edit dialog
 const openEdit = (emp) => {
-  console.log('Editing Employee:', emp);
-  employee.value = { ...emp }; // Populate the employee object with the selected employee's data
-  submitted.value = false; // Reset the submitted state
+console.log('Editing Employee:', emp);
+employee.value = { ...emp }; // Populate the employee object with the selected employee's data
+submitted.value = false; // Reset the submitted state
   editEmployeeDialog.value = true; // Open the edit dialog
 };
 
@@ -333,36 +324,31 @@ const setDisabledUntil = async () => {
       id: selectedEmployeeId.value,
       disabledUntil: selectedDisabledUntil.value.toISOString(),
     };
-
-    const response = await axios.post('http://localhost:3000/graphql', {
-      query: mutation,
-      variables,
-    });
-
-    if (response.data.errors) {
-      throw new Error(response.data.errors[0].message);
-    }
-
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Disabled Until date set successfully', life: 3000 });
-    disableDialogVisible.value = false;
-
-    // Refetch the employee list
-    await fetchTaches();
-  } catch (error) {
-    console.error('Error setting Disabled Until:', error);
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to set Disabled Until date', life: 3000 });
-  }
+const response = await axios.post('http://localhost:3000/graphql', {
+query: mutation,
+variables,
+});
+if (response.data.errors) {
+throw new Error(response.data.errors[0].message);
+}
+toast.add({ severity: 'success', summary: 'Success', detail: 'Disabled Until date set successfully', life:
+3000 });
+disableDialogVisible.value = false;
+// Refetch the employee list
+await fetchTaches();
+} catch (error) {
+console.error('Error setting Disabled Until:', error);
+toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to set Disabled Until date', life: 3000 });
+}
 };
-
 // Confirm delete employee
 const confirmDeleteEmployee = (emp) => {
-  employeeToDelete.value = emp; // Store the employee to be deleted
-  deleteEmployeeDialog.value = true; // Open the delete confirmation dialog
+employeeToDelete.value = emp; // Store the employee to be deleted
+deleteEmployeeDialog.value = true; // Open the delete confirmation dialog
 };
-
 // Open send email dialog
 const openSendEmailDialog = (employeeId) => {
-  selectedEmployeeId.value = employeeId;
+selectedEmployeeId.value = employeeId;
   emailSubject.value = '';
   emailMessage.value = '';
   sendEmailDialog.value = true;
@@ -379,7 +365,8 @@ const exportCSV = () => {
 // Delete selected projects
 const deleteSelectedProjects = async () => {
     try {
-        const deletePromises = selectedProjects.value.map((proj) => deleteProjetMutation({ id: proj.idProjet }));
+        const deletePromises = selectedProjects.value.map((proj) => deleteProjetMutation({ id:
+proj.idProjet }));
         await Promise.all(deletePromises);
         await refetchProjects();
         toast.add({
@@ -441,13 +428,49 @@ const confirmDeleteSelectedEmployees = async () => {
     fetchTaches(); // Refresh the employee list
   } catch (error) {
     console.error('Error deleting employees:', error);
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete selected employees', life: 3000 });
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete selected employees', life:
+3000 });
   }
 };
 
 onMounted(() => {
   fetchTaches();
 });
+const sendEmail = async () => {
+  if (!emailSubject.value || !emailMessage.value) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in both subject and message', life: 3000 });
+    return;
+  }
+
+  try {
+    const mutation = `
+      mutation SendEmailToEmployee($id: String!, $subject: String!, $message: String!) {
+        sendEmailToEmployee(id: $id, subject: $subject, message: $message)
+      }
+    `;
+    const variables = {
+      id: selectedEmployeeId.value,
+      subject: emailSubject.value,
+      message: emailMessage.value,
+    };
+
+    const response = await axios.post('http://localhost:3000/graphql', {
+      query: mutation,
+      variables,
+    });
+
+    if (response.data.errors) {
+      throw new Error(response.data.errors[0].message);
+    }
+
+    // Close the dialog and show success message
+    sendEmailDialog.value = false; // Close the dialog
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Email sent successfully', life: 3000 });
+  } catch (error) {
+    console.error('Error sending email:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to send email', life: 3000 });
+  }
+};
 </script>
 
 <template>
@@ -456,12 +479,12 @@ onMounted(() => {
       <Toolbar class="mb-4">
         <template #start>
           <Button label="New" icon="pi pi-plus" class="mr-2" @click="openNew" />
-          <Button 
-            label="Delete" 
-            icon="pi pi-trash" 
-            severity="danger" 
-            @click="confirmDeleteSelectedEmployees" 
-            :disabled="!selectedEmployees.length" 
+          <Button
+            label="Delete"
+            icon="pi pi-trash"
+            severity="danger"
+            @click="confirmDeleteSelectedEmployees"
+            :disabled="!selectedEmployees.length"
           />
         </template>
         <template #end>
@@ -478,7 +501,8 @@ onMounted(() => {
         :paginator="true"
         :rows="10"
         :filters="filters"
-        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink
+CurrentPageReport RowsPerPageDropdown"
         :rowsPerPageOptions="[5, 10, 25]"
         currentPageReportTemplate="Showing {first} to {last} of {totalRecords} employees"
       >
@@ -496,7 +520,8 @@ onMounted(() => {
               <InputIcon>
                 <i class="pi pi-search" />
               </InputIcon>
-              <InputText v-model="searchQuery" placeholder="Search by name..." class="p-inputtext-sm p-mr-2" />
+              <InputText v-model="searchQuery" placeholder="Search by name..." class="p-inputtext-sm p
+mr-2" />
             </IconField>
           </div>
         </template>
@@ -512,18 +537,23 @@ onMounted(() => {
         </Column>
         <Column header="Actions" headerStyle="width: 14rem">
           <template #body="{ data }">
-            <Button icon="pi pi-pencil" class="mr-2" severity="warning" outlined @click="openEdit(data)" />
-            <Button icon="pi pi-trash"  class="mr-2" severity="danger" outlined @click="confirmDeleteEmployee(data)" />
-            <Button icon="pi pi-envelope" class="mr-2" severity="info" outlined @click="openSendEmailDialog(data.idEmployee)" />
-            <Button icon="pi pi-calendar" class="mr-2" severity="secondary" outlined @click="openDisableDialog(data)" />
-           
+            <Button icon="pi pi-pencil" class="mr-2" severity="warning" outlined @click="openEdit(data)"
+/>
+            <Button icon="pi pi-trash"  class="mr-2" severity="danger" outlined
+@click="confirmDeleteEmployee(data)" />
+            <Button icon="pi pi-envelope" class="mr-2" severity="info" outlined
+@click="openSendEmailDialog(data.idEmployee)" />
+            <Button icon="pi pi-calendar" class="mr-2" severity="secondary" outlined
+@click="openDisableDialog(data)" />
+
           </template>
         </Column>
       </DataTable>
     </div>
 
     <!-- Add Employee Dialog -->
-    <Dialog v-model:visible="addEmployeeDialog" header="Add New Employee" modal class="p-dialog-responsive" :style="{ width: '30%' }">
+    <Dialog v-model:visible="addEmployeeDialog" header="Add New Employee" modal class="p
+dialog-responsive" :style="{ width: '30%' }">
       <div class="p-fluid">
         <div class="field">
           <label for="name">Name</label>
@@ -531,22 +561,31 @@ onMounted(() => {
         </div>
         <div class="field">
           <label for="email">Email</label>
-          <InputText id="email" v-model="employee.emailEmployee" required type="email" class="p-inputtext-lg" />
+          <InputText id="email" v-model="employee.emailEmployee" required type="email" class="p
+inputtext-lg" />
         </div>
         <div class="field">
           <label for="role">Role</label>
           <InputText id="role" v-model="employee.role" required class="p-inputtext-lg" />
         </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <InputText id="password" v-model="employee.passwordEmployee" required type="password"
+class="p-inputtext-lg" />
+        </div>
       </div>
 
       <template #footer>
-        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text" @click="hideDialog" />
-        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text" @click="saveEmployee" />
+        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text"
+@click="hideDialog" />
+        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text"
+@click="saveEmployee" />
       </template>
     </Dialog>
 
     <!-- Edit Employee Dialog -->
-    <Dialog v-model:visible="editEmployeeDialog" header="Edit Employee" modal class="p-dialog-responsive" :style="{ width: '30%' }">
+    <Dialog v-model:visible="editEmployeeDialog" header="Edit Employee" modal class="p-dialog
+responsive" :style="{ width: '30%' }">
       <div class="p-fluid">
         <div class="field">
           <label for="name">Name</label>
@@ -554,22 +593,30 @@ onMounted(() => {
         </div>
         <div class="field">
           <label for="email">Email</label>
-          <InputText id="email" v-model="employee.emailEmployee" required type="email" class="p-inputtext-lg" />
+          <InputText id="email" v-model="employee.emailEmployee" required type="email" class="p
+inputtext-lg" />
         </div>
         <div class="field">
           <label for="role">Role</label>
           <InputText id="role" v-model="employee.role" required class="p-inputtext-lg" />
         </div>
+        <div class="field">
+          <label for="role">Password</label>
+          <InputText id="role" v-model="employee.passwordEmployee" required class="p-inputtext-lg" />
+        </div>
       </div>
 
       <template #footer>
-        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text" @click="hideDialog" />
-        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text" @click="updateEmployee" />
+        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text"
+@click="hideDialog" />
+        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text"
+@click="updateEmployee" />
       </template>
     </Dialog>
 
     <!-- Reset Password Dialog -->
-    <Dialog v-model:visible="resetPasswordDialog" header="Reset Password" modal class="p-dialog-responsive" :style="{ width: '30%' }">
+    <Dialog v-model:visible="resetPasswordDialog" header="Reset Password" modal class="p-dialog
+responsive" :style="{ width: '30%' }">
       <div class="p-fluid">
         <div class="field">
           <label for="email">Email</label>
@@ -577,81 +624,104 @@ onMounted(() => {
         </div>
         <div class="field">
           <label for="newPassword">New Password</label>
-          <InputText id="newPassword" v-model="newPassword" required type="password" class="p-inputtext-lg" />
+          <InputText id="newPassword" v-model="newPassword" required type="password" class="p
+inputtext-lg" />
         </div>
       </div>
 
       <template #footer>
         <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="hideDialog" />
-        <Button label="Send" icon="pi pi-check" class="p-button-text" @click="sendResetPasswordEmail" />
+        <Button label="Send" icon="pi pi-check" class="p-button-text"
+@click="sendResetPasswordEmail" />
       </template>
     </Dialog>
 
     <!-- Disable Employee Dialog -->
-    <Dialog v-model:visible="disableEmployeeDialog" header="Disable Employee" modal class="p-dialog-responsive" :style="{ width: '30%' }">
+    <Dialog v-model:visible="disableEmployeeDialog" header="Disable Employee" modal class="p
+dialog-responsive" :style="{ width: '30%' }">
       <div class="p-fluid">
         <div class="field">
           <label for="disabledUntil">Disable Until</label>
-          <input 
-            id="disabledUntil" 
-            v-model="disabledUntil" 
-            type="date" 
-            class="p-inputtext-lg" 
+          <input
+            id="disabledUntil"
+            v-model="disabledUntil"
+            type="date"
+            class="p-inputtext-lg"
           />
         </div>
       </div>
 
       <template #footer>
         <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="hideDialog" />
-        <Button label="Disable" icon="pi pi-check" class="p-button-danger" @click="disableEmployee" />
+        <Button label="Disable" icon="pi pi-check" class="p-button-danger" @click="disableEmployee"
+/>
       </template>
     </Dialog>
-           
+
     <!-- Delete Employee Dialog -->
     <!-- Delete Employee Dialog -->
-    <Dialog v-model:visible="deleteEmployeeDialog" header="Confirm" modal class="p-dialog-responsive" :style="{ width: '30%' }">
+    <Dialog v-model:visible="deleteEmployeeDialog" header="Confirm" modal class="p-dialog
+responsive" :style="{ width: '30%' }">
       <div class="confirmation-content">
         <i class="pi pi-exclamation-triangle" style="font-size: 2rem"></i>
         <span>Are you sure you want to delete <b>{{ employeeToDelete?.nomEmployee }}</b>?</span>
       </div>
 
       <template #footer>
-        <Button label="No" icon="pi pi-times" @click="deleteEmployeeDialog = false" class="p-button-text" />
-        <Button label="Yes" icon="pi pi-check" @click="deleteEmployee" :loading="loading" class="p-button-danger" />
+        <Button label="No" icon="pi pi-times" @click="deleteEmployeeDialog = false" class="p-button
+text" />
+        <Button label="Yes" icon="pi pi-check" @click="deleteEmployee" :loading="loading" class="p
+button-danger" />
       </template>
     </Dialog>
 
     <!-- Send Email Dialog -->
-    <Dialog v-model:visible="sendEmailDialog" header="Send Email" :modal="true" :style="{ width: '500px' }">
-      <div class="field">
-        <label for="subject" class="font-bold block mb-2">Subject</label>
-        <InputText id="subject" v-model="emailSubject" class="w-full" placeholder="Enter email subject" />
-      </div>
-      <div class="field">
-        <label for="message" class="font-bold block mb-2">Message</label>
-        <Textarea id="message" v-model="emailMessage" class="w-full" rows="5" placeholder="Enter email message"></Textarea>
-      </div>
-      <template #footer>
-        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="sendEmailDialog = false" />
-        <Button label="Send" icon="pi pi-send" class="p-button" @click="sendEmail" />
-      </template>
-    </Dialog>
+<Dialog v-model:visible="sendEmailDialog" header="Send Email" :modal="true" :style="{ width: '500px' }">
+  <div class="field">
+    <label for="subject" class="font-bold block mb-2">Subject</label>
+    <InputText
+      id="subject"
+      v-model="emailSubject"
+      class="w-full"
+      placeholder="Enter email subject"
+    />
+  </div>
+
+  <div class="field">
+    <label for="message" class="font-bold block mb-2">Message</label>
+    <Textarea
+      id="message"
+      v-model="emailMessage"
+      class="w-full"
+      rows="5"
+      placeholder="Enter email message"
+    />
+  </div>
+
+<template #footer>
+  <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="sendEmailDialog = false" />
+  <Button label="Send" icon="pi pi-send" class="p-button" @click="sendEmail" />
+</template>
+</Dialog>
+
 
     <!-- Set Disabled Until Dialog -->
-    <Dialog v-model:visible="disableDialogVisible" header="Set Disabled Until" :modal="true" :style="{ width: '400px' }">
+    <Dialog v-model:visible="disableDialogVisible" header="Set Disabled Until" :modal="true" :style="{
+width: '400px' }">
       <div class="field">
         <label for="disabledUntil" class="font-bold block mb-2">Disabled Until</label>
-        <Calendar 
-          id="disabledUntil" 
-          v-model="selectedDisabledUntil" 
-          :showIcon="true" 
-          class="w-full" 
-          placeholder="Select a date" 
-          dateFormat="yy-mm-dd" 
+        <Calendar
+          id="disabledUntil"
+          v-model="selectedDisabledUntil"
+          :showIcon="true"
+          class="w-full"
+          placeholder="Select a date"
+          dateFormat="yy-mm-dd"
         />
       </div>
       <template #footer>
-        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="disableDialogVisible = false" />
+        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="disableDialogVisible =
+false" />
         <Button label="Save" icon="pi pi-check" class="p-button" @click="setDisabledUntil" />
       </template>
     </Dialog>
@@ -678,16 +748,14 @@ onMounted(() => {
 }
 
 .p-fluid .field label {
-    font-weight: bold;
-    margin-bottom: 0.5rem;
-    display: block;  /* Ensure labels are block-level elements */
+font-weight: bold;
+margin-bottom: 0.5rem;
+display: block;  /* Ensure labels are block-level elements */
 }
-
 .p-fluid .field .p-inputtext-lg {
-    width: 100%;
-    padding: 0.75rem;  /* Add padding for better spacing */
-    font-size: 1rem;
-    border-radius: 5px;
+width: 100%;
+padding: 0.75rem;  /* Add padding for better spacing */
+font-size: 1rem;
+border-radius: 5px;
 }
-
 </style>
