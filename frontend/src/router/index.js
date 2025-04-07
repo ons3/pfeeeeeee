@@ -11,6 +11,11 @@ const routes = [
     component: Login,
   },
   {
+    path: '/EmployeeLogin',
+    name: 'EmployeeLogin',
+    component: EmployeeLogin,
+  },
+  {
     path: '/dashboard',
     name: 'EmployeeDashboard',
     component: EmployeeDashboard,
