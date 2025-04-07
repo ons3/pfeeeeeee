@@ -2,12 +2,13 @@ import { createRouter, createWebHistory } from 'vue-router';
 import AppLayout from '@/layout/AppLayout.vue';
 import EmployeeLogin from '@/views/pages/auth/EmployeeLogin.vue';
 import EmployeeDashboard from '@/views/pages/EmployeeDashboard.vue';
+import Login from '@/views/pages/auth/Login.vue';
 
 const routes = [
   {
     path: '/login',
-    name: 'EmployeeLogin',
-    component: EmployeeLogin,
+    name: 'Login',
+    component: Login,
   },
   {
     path: '/dashboard',
