@@ -9,6 +9,8 @@ import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
 import Calendar from 'primevue/calendar';
 import Password from 'primevue/password';
+import Dropdown from 'primevue/dropdown';
+import Chip from 'primevue/chip';
 import axios from 'axios';
 const toast = useToast();
 const dt = ref();
@@ -36,6 +38,8 @@ const loading = ref(false); // Loading state
 const filters = ref({
   global: { value: '' }
 }); // Filters for DataTable
+const equipes = ref([]); // Store the list of equipes
+const selectedEquipe = ref(null); // Selected equipe for the dropdown
 
 // Fetch employees
 const fetchTaches = async () => {
@@ -50,12 +54,12 @@ const fetchTaches = async () => {
             passwordEmployee
             role
             disabledUntil
+            idEquipe
           }
         }
       }
     `;
     const response = await axios.post('http://localhost:3000/graphql', { query });
-
     if (response.data?.data?.searchEmployees?.employees) {
       taches.value = response.data.data.searchEmployees.employees.map(emp => ({
         ...emp,
@@ -69,6 +73,30 @@ console.error("Error fetching employees:", error);
 toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load employees', life: 3000 });
 }
 };
+
+// Fetch equipes from the backend
+const fetchEquipes = async () => {
+  try {
+    const query = `
+      query {
+        equipes {
+          idEquipe
+          nom_equipe
+        }
+      }
+    `;
+    const response = await axios.post('http://localhost:3000/graphql', { query });
+    if (response.data?.data?.equipes) {
+      equipes.value = response.data.data.equipes;
+    } else {
+      throw new Error('Failed to fetch equipes');
+    }
+  } catch (error) {
+    console.error('Error fetching equipes:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load equipes', life: 3000 });
+  }
+};
+
 // Filter employees based on search query
 const filteredEmployees = computed(() => {
 return taches.value.filter(emp =>
@@ -83,11 +111,10 @@ addEmployeeDialog.value = true; // Open the dialog
 };
 // Save the new employee
 const saveEmployee = async () => {
-submitted.value = true;
-if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role ||
-!employee.value.passwordEmployee) {
-toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
-return;
+  submitted.value = true;
+  if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role || !employee.value.passwordEmployee) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
+    return;
   }
 
   try {
@@ -113,37 +140,34 @@ return;
     const variables = {
       nomEmployee: employee.value.nomEmployee,
       emailEmployee: employee.value.emailEmployee,
-      passwordEmployee: employee.value.passwordEmployee, // Include the password
+      passwordEmployee: employee.value.passwordEmployee,
       idEquipe: employee.value.idEquipe || null,
       role: employee.value.role,
     };
 
-    const response = await axios.post('http://localhost:3000/graphql', {
-query: mutation,
-variables,
-});
-if (response.data.errors) {
-throw new Error(response.data.errors[0].message);
-}
-toast.add({ severity: 'success', summary: 'Success', detail: 'Employee added successfully', life: 3000
-});
-addEmployeeDialog.value = false; // Close the dialog
-fetchTaches(); // Refresh the employee list
-} catch (error) {
-const errorMessage = error.response?.data?.errors?.[0]?.message || 'Failed to add employee';
-toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 3000 });
-}
+    const response = await axios.post('http://localhost:3000/graphql', { query: mutation, variables });
+    if (response.data.errors) {
+      throw new Error(response.data.errors[0].message);
+    }
+
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee added successfully', life: 3000 });
+    addEmployeeDialog.value = false;
+    fetchTaches();
+  } catch (error) {
+    console.error('Error saving employee:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to save employee', life: 3000 });
+  }
 };
 // Update the employee
 const updateEmployee = async () => {
-submitted.value = true;
-if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role) {
-toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
-return;
-}
-console.log('Updating Employee:', employee.value);
-try {
-const mutation = `
+  submitted.value = true;
+  if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
+    return;
+  }
+
+  try {
+    const mutation = `
       mutation UpdateEmployee(
         $id: String!,
         $nomEmployee: String,
@@ -167,25 +191,21 @@ const mutation = `
       nomEmployee: employee.value.nomEmployee,
       emailEmployee: employee.value.emailEmployee,
       role: employee.value.role,
-      idEquipe: employee.value.idEquipe || null,
+      idEquipe: employee.value.idEquipe || null, // Send null if no equipe is assigned
     };
 
-    const response = await axios.post('http://localhost:3000/graphql', {
-      query: mutation,
-      variables,
-    });
+    const response = await axios.post('http://localhost:3000/graphql', { query: mutation, variables });
 
     if (response.data.errors) {
       throw new Error(response.data.errors[0].message);
     }
 
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee updated successfully', life:
-3000 });
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee updated successfully', life: 3000 });
     editEmployeeDialog.value = false; // Close the dialog
     fetchTaches(); // Refresh the employee list
   } catch (error) {
-    const errorMessage = error.response?.data?.errors?.[0]?.message || 'Failed to update employee';
-    toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 3000 });
+    console.error('Error updating employee:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to update employee', life: 3000 });
   }
 };
 
@@ -436,6 +456,7 @@ const confirmDeleteSelectedEmployees = async () => {
 
 onMounted(() => {
   fetchTaches();
+  fetchEquipes();
 });
 const sendEmail = async () => {
   if (!emailSubject.value || !emailMessage.value) {
@@ -534,6 +555,27 @@ const passwordStrengthWidth = computed(() => {
       return '0%';
   }
 });
+
+// Get equipe name by ID
+const getEquipeName = (idEquipe) => {
+  const equipe = equipes.value.find(e => e.idEquipe === idEquipe);
+  return equipe ? equipe.nom_equipe : '';
+};
+
+// Handle adding equipe
+const handleAddEquipe = () => {
+  if (selectedEquipe.value) {
+    employee.value.idEquipe = selectedEquipe.value;
+    selectedEquipe.value = null; // Reset the dropdown
+    toast.add({ severity: 'success', summary: 'Equipe Added', detail: 'Equipe assigned to employee', life: 3000 });
+  }
+};
+
+// Handle removing equipe
+const handleRemoveEquipe = () => {
+  employee.value.idEquipe = null; // Remove the equipe
+  toast.add({ severity: 'info', summary: 'Equipe Removed', detail: 'Equipe unassigned from employee', life: 3000 });
+};
 </script>
 
 <template>
@@ -564,8 +606,7 @@ const passwordStrengthWidth = computed(() => {
         :paginator="true"
         :rows="10"
         :filters="filters"
-        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink
-CurrentPageReport RowsPerPageDropdown"
+        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
         :rowsPerPageOptions="[5, 10, 25]"
         currentPageReportTemplate="Showing {first} to {last} of {totalRecords} employees"
       >
@@ -598,25 +639,24 @@ mr-2" />
             {{ data.disabledUntil ? new Date(data.disabledUntil).toLocaleDateString('en-US') : 'Active' }}
           </template>
         </Column>
+        <Column field="idEquipe" header="Team">
+          <template #body="{ data }">
+            {{ getEquipeName(data.idEquipe) || 'No Equipe Assigned' }}
+          </template>
+        </Column>
         <Column header="Actions" headerStyle="width: 14rem">
           <template #body="{ data }">
-            <Button icon="pi pi-pencil" class="mr-2" severity="warning" outlined @click="openEdit(data)"
-/>
-            <Button icon="pi pi-trash"  class="mr-2" severity="danger" outlined
-@click="confirmDeleteEmployee(data)" />
-            <Button icon="pi pi-envelope" class="mr-2" severity="info" outlined
-@click="openSendEmailDialog(data.idEmployee)" />
-            <Button icon="pi pi-calendar" class="mr-2" severity="secondary" outlined
-@click="openDisableDialog(data)" />
-
+            <Button icon="pi pi-pencil" class="mr-2" severity="warning" outlined @click="openEdit(data)" />
+            <Button icon="pi pi-trash"  class="mr-2" severity="danger" outlined @click="confirmDeleteEmployee(data)" />
+            <Button icon="pi pi-envelope" class="mr-2" severity="info" outlined @click="openSendEmailDialog(data.idEmployee)" />
+            <Button icon="pi pi-calendar" class="mr-2" severity="secondary" outlined @click="openDisableDialog(data)" />
           </template>
         </Column>
       </DataTable>
     </div>
 
     <!-- Add Employee Dialog -->
-    <Dialog v-model:visible="addEmployeeDialog" header="Add New Employee" modal class="p
-dialog-responsive" :style="{ width: '30%' }">
+    <Dialog v-model:visible="addEmployeeDialog" header="Add New Employee" modal class="p-dialog-responsive" :style="{ width: '50%' }">
       <div class="p-fluid">
         <div class="field">
           <label for="name">Name</label>
@@ -641,30 +681,49 @@ dialog-responsive" :style="{ width: '30%' }">
             class="w-full"
           />
           <small v-if="submitted && !employee.passwordEmployee" class="p-error">Password is required.</small>
+        </div>
 
-          <!-- Password Strength Indicator -->
-          <div class="password-strength mt-2">
-            <div
-              class="strength-bar"
-              :class="passwordStrengthClass"
-              :style="{ width: passwordStrengthWidth }"
-            ></div>
-            <small class="strength-label">{{ passwordStrength }}</small>
+        <!-- Equipe Management Section -->
+        <div class="field">
+          <label class="font-bold block mb-2">Equipe Management</label>
+          <div class="flex gap-2">
+            <Dropdown
+              v-model="selectedEquipe"
+              :options="equipes"
+              optionLabel="nom_equipe"
+              optionValue="idEquipe"
+              placeholder="Select an equipe"
+              class="w-full"
+            />
+            <Button
+              label="Add Equipe"
+              icon="pi pi-plus"
+              @click="handleAddEquipe"
+              :disabled="!selectedEquipe"
+            />
+          </div>
+          <div class="mt-4">
+            <h5 class="font-bold mb-2">Assigned Equipe</h5>
+            <div class="flex flex-wrap gap-2">
+              <Chip
+                v-if="employee.idEquipe"
+                :label="getEquipeName(employee.idEquipe)"
+                removable
+                @remove="handleRemoveEquipe"
+              />
+            </div>
           </div>
         </div>
       </div>
 
       <template #footer>
-        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text"
-@click="hideDialog" />
-        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text"
-@click="saveEmployee" />
+        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text" @click="hideDialog" />
+        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text" @click="saveEmployee" />
       </template>
     </Dialog>
 
     <!-- Edit Employee Dialog -->
-    <Dialog v-model:visible="editEmployeeDialog" header="Edit Employee" modal class="p-dialog
-responsive" :style="{ width: '30%' }">
+    <Dialog v-model:visible="editEmployeeDialog" header="Edit Employee" modal class="p-dialog-responsive" :style="{ width: '50%' }">
       <div class="p-fluid">
         <div class="field">
           <label for="name">Name</label>
@@ -678,35 +737,43 @@ responsive" :style="{ width: '30%' }">
           <label for="role">Role</label>
           <InputText id="role" v-model="employee.role" required class="p-inputtext-lg" />
         </div>
-        <div class="field">
-          <label for="password" class="font-bold block mb-2">Password *</label>
-          <Password
-            id="password"
-            v-model="employee.passwordEmployee"
-            required
-            toggleMask
-            :class="{ 'p-invalid': submitted && !employee.passwordEmployee }"
-            class="w-full"
-          />
-          <small v-if="submitted && !employee.passwordEmployee" class="p-error">Password is required.</small>
 
-          <!-- Password Strength Indicator -->
-          <div class="password-strength mt-2">
-            <div
-              class="strength-bar"
-              :class="passwordStrengthClass"
-              :style="{ width: passwordStrengthWidth }"
-            ></div>
-            <small class="strength-label">{{ passwordStrength }}</small>
+        <!-- Equipe Management Section -->
+        <div class="field">
+          <label class="font-bold block mb-2">Equipe Management</label>
+          <div class="flex gap-2">
+            <Dropdown
+              v-model="selectedEquipe"
+              :options="equipes"
+              optionLabel="nom_equipe"
+              optionValue="idEquipe"
+              placeholder="Select an equipe"
+              class="w-full"
+            />
+            <Button
+              label="Add Equipe"
+              icon="pi pi-plus"
+              @click="handleAddEquipe"
+              :disabled="!selectedEquipe"
+            />
+          </div>
+          <div class="mt-4">
+            <h5 class="font-bold mb-2">Assigned Equipe</h5>
+            <div class="flex flex-wrap gap-2">
+              <Chip
+                v-if="employee.idEquipe"
+                :label="getEquipeName(employee.idEquipe)"
+                removable
+                @remove="handleRemoveEquipe"
+              />
+            </div>
           </div>
         </div>
       </div>
 
       <template #footer>
-        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text"
-@click="hideDialog" />
-        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text"
-@click="updateEmployee" />
+        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text" @click="hideDialog" />
+        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text" @click="updateEmployee" />
       </template>
     </Dialog>
 
@@ -862,3 +929,4 @@ small {
   font-weight: bold;
 }
 </style>
+localhost
