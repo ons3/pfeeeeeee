@@ -8,6 +8,7 @@ import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
 import Calendar from 'primevue/calendar';
+import Password from 'primevue/password';
 import axios from 'axios';
 const toast = useToast();
 const dt = ref();
@@ -471,6 +472,68 @@ const sendEmail = async () => {
     toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to send email', life: 3000 });
   }
 };
+
+// Computed property to evaluate password strength
+const passwordStrength = computed(() => {
+  if (!employee.value.passwordEmployee) return '';
+  const password = employee.value.passwordEmployee;
+
+  // Weak: Less than 6 characters
+  if (password.length < 6) return 'Weak';
+
+  // Medium: At least 6 characters, includes letters and numbers
+  const hasLetters = /[a-zA-Z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  if (hasLetters && hasNumbers) return 'Medium';
+
+  // Strong: At least 8 characters, includes letters, numbers, and special characters
+  const hasSpecialChars = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  if (password.length >= 8 && hasLetters && hasNumbers && hasSpecialChars) return 'Strong';
+
+  return 'Weak';
+});
+
+// Function to determine the color of the password strength
+const passwordStrengthColor = computed(() => {
+  switch (passwordStrength.value) {
+    case 'Weak':
+      return 'red';
+    case 'Medium':
+      return 'orange';
+    case 'Strong':
+      return 'green';
+    default:
+      return '';
+  }
+});
+
+// Computed property for password strength class
+const passwordStrengthClass = computed(() => {
+  switch (passwordStrength.value) {
+    case 'Weak':
+      return 'weak';
+    case 'Medium':
+      return 'medium';
+    case 'Strong':
+      return 'strong';
+    default:
+      return '';
+  }
+});
+
+// Computed property for password strength width
+const passwordStrengthWidth = computed(() => {
+  switch (passwordStrength.value) {
+    case 'Weak':
+      return '33%';
+    case 'Medium':
+      return '66%';
+    case 'Strong':
+      return '100%';
+    default:
+      return '0%';
+  }
+});
 </script>
 
 <template>
@@ -561,17 +624,33 @@ dialog-responsive" :style="{ width: '30%' }">
         </div>
         <div class="field">
           <label for="email">Email</label>
-          <InputText id="email" v-model="employee.emailEmployee" required type="email" class="p
-inputtext-lg" />
+          <InputText id="email" v-model="employee.emailEmployee" required type="email" class="p-inputtext-lg" />
         </div>
         <div class="field">
           <label for="role">Role</label>
           <InputText id="role" v-model="employee.role" required class="p-inputtext-lg" />
         </div>
         <div class="field">
-          <label for="password">Password</label>
-          <InputText id="password" v-model="employee.passwordEmployee" required type="password"
-class="p-inputtext-lg" />
+          <label for="password" class="font-bold block mb-2">Password *</label>
+          <Password
+            id="password"
+            v-model="employee.passwordEmployee"
+            required
+            toggleMask
+            :class="{ 'p-invalid': submitted && !employee.passwordEmployee }"
+            class="w-full"
+          />
+          <small v-if="submitted && !employee.passwordEmployee" class="p-error">Password is required.</small>
+
+          <!-- Password Strength Indicator -->
+          <div class="password-strength mt-2">
+            <div
+              class="strength-bar"
+              :class="passwordStrengthClass"
+              :style="{ width: passwordStrengthWidth }"
+            ></div>
+            <small class="strength-label">{{ passwordStrength }}</small>
+          </div>
         </div>
       </div>
 
@@ -593,16 +672,33 @@ responsive" :style="{ width: '30%' }">
         </div>
         <div class="field">
           <label for="email">Email</label>
-          <InputText id="email" v-model="employee.emailEmployee" required type="email" class="p
-inputtext-lg" />
+          <InputText id="email" v-model="employee.emailEmployee" required type="email" class="p-inputtext-lg" />
         </div>
         <div class="field">
           <label for="role">Role</label>
           <InputText id="role" v-model="employee.role" required class="p-inputtext-lg" />
         </div>
         <div class="field">
-          <label for="role">Password</label>
-          <InputText id="role" v-model="employee.passwordEmployee" required class="p-inputtext-lg" />
+          <label for="password" class="font-bold block mb-2">Password *</label>
+          <Password
+            id="password"
+            v-model="employee.passwordEmployee"
+            required
+            toggleMask
+            :class="{ 'p-invalid': submitted && !employee.passwordEmployee }"
+            class="w-full"
+          />
+          <small v-if="submitted && !employee.passwordEmployee" class="p-error">Password is required.</small>
+
+          <!-- Password Strength Indicator -->
+          <div class="password-strength mt-2">
+            <div
+              class="strength-bar"
+              :class="passwordStrengthClass"
+              :style="{ width: passwordStrengthWidth }"
+            ></div>
+            <small class="strength-label">{{ passwordStrength }}</small>
+          </div>
         </div>
       </div>
 
@@ -757,5 +853,12 @@ width: 100%;
 padding: 0.75rem;  /* Add padding for better spacing */
 font-size: 1rem;
 border-radius: 5px;
+}
+
+/* Add styles for the password strength feedback */
+small {
+  display: block;
+  margin-top: 0.5rem;
+  font-weight: bold;
 }
 </style>
