@@ -301,9 +301,9 @@ export const employeeResolvers = {
               <p>${message}</p>
               <p><strong>Email:</strong> ${employeeEmail}</p>
               <p><strong>Password:</strong> ${employeePassword}</p>
-              <a href="http://localhost:5173/login"
+              <a href="http://localhost:5173/EmployeeLogin"
                 style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px;">
-                Go to Login
+                Go to Employee Login
               </a>
             </div>
           `,
