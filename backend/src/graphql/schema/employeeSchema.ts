@@ -4,73 +4,79 @@ export const employeeTypeDefs = gql`
 scalar DateTime
 
 type Employee {
-  idEmployee: String!
+  idEmployee: ID!
   nomEmployee: String!
   emailEmployee: String!
   passwordEmployee: String
   idEquipe: String
   role: String!
   equipe: Equipe
-  disabledUntil: DateTime
+  disabledUntil: String
 }
 
-  
-  type DeleteEmployeeResponse {
-    success: Boolean!
-    message: String
-  }
+type LoginResponse {
+  success: Boolean!
+  message: String!
+  token: String
+  employee: Employee
+}
 
-  type SearchEmployeesResponse {
-    message: String!
-    employees: [Employee!]!
-  }
+type DeleteEmployeeResponse {
+  success: Boolean!
+  message: String
+}
 
-  type EmployeesResponse {
-    message: String!
-    employees: [Employee!]!
-  }
+type SearchEmployeesResponse {
+  message: String!
+  employees: [Employee!]!
+}
 
-  input EmployeeFilterInput {
+type EmployeesResponse {
+  message: String!
+  employees: [Employee!]!
+}
+
+input EmployeeFilterInput {
+  nomEmployee: String
+  emailEmployee: String
+}
+
+extend type Query {
+  employees: EmployeesResponse
+  employee(id: String!): Employee
+  searchEmployees(filters: EmployeeFilterInput): SearchEmployeesResponse!
+}
+
+extend type Mutation {
+  createEmployee(
+    nomEmployee: String!
+    emailEmployee: String!
+    passwordEmployee: String!
+    idEquipe: String
+    role: String!  # Added role input for creating employee
+    disabledUntil: String
+  ): Employee
+
+  updateEmployee(
+    id: String!
     nomEmployee: String
     emailEmployee: String
-  }
+    passwordEmployee: String
+    idEquipe: String
+    role: String  # Optionally update role
+    disabledUntil: String
+  ): Employee
 
-  extend type Query {
-    employees: EmployeesResponse
-    employee(id: String!): Employee
-    searchEmployees(filters: EmployeeFilterInput): SearchEmployeesResponse!
-  }
+  deleteEmployee(id: String!): DeleteEmployeeResponse
 
-  extend type Mutation {
-    createEmployee(
-      nomEmployee: String!
-      emailEmployee: String!
-      passwordEmployee: String!
-      idEquipe: String
-      role: String!  # Added role input for creating employee
-      disabledUntil: String
+  sendEmailToEmployee(
+    id: String!,
+    subject: String!,
+    message: String!
+  ): Boolean
 
-    ): Employee
-
-    updateEmployee(
-      id: String!
-      nomEmployee: String
-      emailEmployee: String
-      passwordEmployee: String
-      idEquipe: String
-      role: String  # Optionally update role
-      disabledUntil: String
-    ): Employee
-
-    deleteEmployee(id: String!): DeleteEmployeeResponse
-
-    sendEmailToEmployee(
-      id: String!,
-      subject: String!,
-      message: String!
-    ): Boolean
-
-    sendInvitation(id: String!): Boolean
-    acceptInvitation(token: String!): Boolean
-  }
+  sendInvitation(id: String!): Boolean
+  acceptInvitation(token: String!): Boolean
+  loginEmployee(email: String!, password: String!): LoginResponse!
+}
 `;
