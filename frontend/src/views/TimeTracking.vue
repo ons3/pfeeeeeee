@@ -6,15 +6,30 @@ import { useQuery, useMutation } from '@vue/apollo-composable';
 import { SUIVIS_DE_TEMP, CREATE_SUIVI, STOP_ACTIVE_SUIVI, DELETE_SUIVI, GET_PROJECTS, GET_TACHES, GET_ACTIVE_SUIVI } from '@/graphql';
 import { useTimer } from '@/views/uikit/timer';
 import debounce from 'lodash-es/debounce';
+import { useRouter } from 'vue-router';
 
 const DataTable = defineAsyncComponent(() => import('primevue/datatable'));
 const Dialog = defineAsyncComponent(() => import('primevue/dialog'));
 
 // Constants
 const WEEK_START_DAY = 1; // Monday
-const EMPLOYEE_ID = '2c156683-2578-4e71-8463-2acaff034c09';
 const LOCAL_STORAGE_KEY = 'activeTimeTracking';
 const WEEKLY_GOAL_MINUTES = 40 * 60; // 40 hours in minutes
+
+// Récupérer l'employé connecté depuis localStorage
+const employee = JSON.parse(localStorage.getItem('employee'));
+const EMPLOYEE_ID = employee?.idEmployee; // Utiliser l'ID de l'employé connecté
+
+const router = useRouter();
+
+if (!employee || !employee.idEmployee) {
+  router.push({ name: 'EmployeeLogin' }); // Redirige vers la page de connexion
+}
+
+// Vérifiez si l'ID de l'employé est disponible
+if (!EMPLOYEE_ID) {
+  console.error('Employee ID not found. Please log in.');
+}
 
 // Composables
 const toast = useToast();

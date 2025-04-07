@@ -2,6 +2,7 @@ import sql from 'mssql';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcrypt';
 import nodemailer from 'nodemailer';
+import jwt from 'jsonwebtoken';
 
 const fetchEmployees = async (pool: sql.ConnectionPool) => {
   try {
@@ -314,6 +315,59 @@ export const employeeResolvers = {
         console.error('Error sending email:', error);
         throw new Error('Failed to send email');
       }
-    }    
+    },
+    loginEmployee: async (
+      _: any,
+      { email, password }: { email: string; password: string },
+      { pool }: { pool: sql.ConnectionPool }
+    ) => {
+      try {
+        // Récupérer l'employé par email
+        const result = await pool.request()
+          .input('email', sql.VarChar, email)
+          .query(`
+            SELECT idEmployee, nom_employee, email_employee, password_employee, role
+            FROM Employee
+            WHERE email_employee = @email;
+          `);
+    
+        if (result.recordset.length === 0) {
+          throw new Error('Invalid email or password');
+        }
+    
+        const employee = result.recordset[0];
+    
+        // Vérifier si le mot de passe correspond
+        if (password !== employee.password_employee) {
+          throw new Error('Invalid email or password');
+        }
+    
+        // Générer un token JWT
+        const token = jwt.sign(
+          { idEmployee: employee.idEmployee, email: employee.email_employee, role: employee.role },
+          'your_secret_key', // Remplacez par une clé secrète sécurisée
+          { expiresIn: '1d' }
+        );
+    
+        return {
+          success: true,
+          message: 'Login successful',
+          token,
+          employee: {
+            idEmployee: employee.idEmployee,
+            nomEmployee: employee.nom_employee,
+            emailEmployee: employee.email_employee,
+            role: employee.role,
+          },
+        };
+      } catch (error) {
+        console.error('Error logging in employee:', error);
+        if (error instanceof Error) {
+          throw new Error(error.message || 'Failed to log in');
+        } else {
+          throw new Error('Failed to log in');
+        }
+      }
+    },
   }
 };
