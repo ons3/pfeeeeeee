@@ -13,24 +13,24 @@ import { onError } from '@apollo/client/link/error';
 
 import '@/assets/styles.scss';
 
+// Import the timer composable
+import { useTimer } from '@/views/uikit/timer';
+
 // HTTP Link Configuration
 const httpLink = createHttpLink({
   uri: 'http://localhost:3000/graphql',
-  // Optional: Add if your API requires credentials
-  // credentials: 'include'
 });
 
 // Enhanced Error Handling
-const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
+const errorLink = onError(({ graphQLErrors, networkError }) => {
   if (graphQLErrors) {
     graphQLErrors.forEach(({ message, path }) => {
       console.error(`[GraphQL error] Path: ${path}`, message);
     });
   }
-  
+
   if (networkError) {
     console.error('[Network error]', networkError);
-    // Optional: Redirect to error page or show notification
   }
 });
 
@@ -46,13 +46,17 @@ const apolloClient = new ApolloClient({
     query: {
       fetchPolicy: 'network-first',
     },
-  }
+  },
 });
 
 // App Creation
 const app = createApp(App);
 
-// Plugins Registration (unchanged from your working version)
+// Initialize the timer globally
+const { restoreTimerState } = useTimer();
+restoreTimerState(); // Restore the timer state when the app starts
+
+// Plugins Registration
 app.use(router);
 app.use(PrimeVue, {
   theme: {

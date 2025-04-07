@@ -7,258 +7,209 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
-import Dropdown from 'primevue/dropdown';
 import Calendar from 'primevue/calendar';
-import Tag from 'primevue/tag';
 import Password from 'primevue/password';
-import ProgressSpinner from 'primevue/progressspinner';
+import Dropdown from 'primevue/dropdown';
+import Chip from 'primevue/chip';
 import axios from 'axios';
-
 const toast = useToast();
 const dt = ref();
-const employees = ref([]);
-const teams = ref([]);
-const loading = ref(false);
-
-// Dialog state variables
+const taches = ref([]);
 const addEmployeeDialog = ref(false);
 const editEmployeeDialog = ref(false);
 const deleteEmployeeDialog = ref(false);
 const disableEmployeeDialog = ref(false);
-const resetPasswordDialog = ref(false);
-
-const employee = ref({
-  nom_employee: '',
-  email_employee: '',
-  password_employee: '',
-  idEquipe: null,
-  role: 'EMPLOYEE'
-});
-
+const resetPasswordDialog = ref(false); // Dialog for password reset
+const sendEmailDialog = ref(false); // Dialog for sending email
+const employee = ref({});
 const submitted = ref(false);
-const searchQuery = ref('');
+const searchQuery = ref(''); // Search bar query
+const employeeToDelete = ref(null);
+const disabledUntil = ref(null);
 const newPassword = ref('');
-const disableUntilDate = ref(null);
-const selectedEmployees = ref([]);
+const emailForReset = ref(''); // Email to be used for reset
+const emailSubject = ref(''); // Email subject
+const emailMessage = ref(''); // Email message
+const selectedEmployeeId = ref(null); // Selected employee ID for sending email
+const disableDialogVisible = ref(false); // Dialog visibility for setting disabled until
+const selectedDisabledUntil = ref(null); // Selected date for disabling employee
+const selectedEmployees = ref([]); // Array to store selected employees
+const loading = ref(false); // Loading state
+const filters = ref({
+  global: { value: '' }
+}); // Filters for DataTable
+const equipes = ref([]); // Store the list of equipes
+const selectedEquipe = ref(null); // Selected equipe for the dropdown
 
-const roles = ref([
-  { name: 'Admin', value: 'ADMIN' },
-  { name: 'Employee', value: 'EMPLOYEE' },
-  { name: 'Manager', value: 'MANAGER' }
-]);
-
-// Computed property for dialog visibility
-const isEmployeeDialogVisible = computed(() => addEmployeeDialog.value || editEmployeeDialog.value);
-
-// Fetch employees with proper error handling
-const fetchEmployees = async () => {
-  loading.value = true;
+// Fetch employees
+const fetchTaches = async () => {
   try {
     const query = `
       query {
-        employees {
+        searchEmployees {
           employees {
             idEmployee
-            nom_employee
-            email_employee
+            nomEmployee
+            emailEmployee
+            passwordEmployee
             role
-            idEquipe
             disabledUntil
+            idEquipe
           }
         }
-        teams {
+      }
+    `;
+    const response = await axios.post('http://localhost:3000/graphql', { query });
+    if (response.data?.data?.searchEmployees?.employees) {
+      taches.value = response.data.data.searchEmployees.employees.map(emp => ({
+        ...emp,
+        disabledUntil: emp.disabledUntil ? new Date(emp.disabledUntil) : null
+      }));
+} else {
+throw new Error('Invalid response structure');
+}
+} catch (error) {
+console.error("Error fetching employees:", error);
+toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load employees', life: 3000 });
+}
+};
+
+// Fetch equipes from the backend
+const fetchEquipes = async () => {
+  try {
+    const query = `
+      query {
+        equipes {
           idEquipe
           nom_equipe
         }
       }
     `;
-    
-    const response = await axios.post('http://localhost:3000/graphql', { 
-      query,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
+    const response = await axios.post('http://localhost:3000/graphql', { query });
+    if (response.data?.data?.equipes) {
+      equipes.value = response.data.data.equipes;
+    } else {
+      throw new Error('Failed to fetch equipes');
+    }
+  } catch (error) {
+    console.error('Error fetching equipes:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load equipes', life: 3000 });
+  }
+};
+
+// Filter employees based on search query
+const filteredEmployees = computed(() => {
+return taches.value.filter(emp =>
+emp.nomEmployee.toLowerCase().includes(searchQuery.value.toLowerCase())
+);
+});
+// Open the "Add Employee" dialog
+const openNew = () => {
+employee.value = {}; // Reset the employee object
+submitted.value = false; // Reset the submitted state
+addEmployeeDialog.value = true; // Open the dialog
+};
+// Save the new employee
+const saveEmployee = async () => {
+  submitted.value = true;
+  if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role || !employee.value.passwordEmployee) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
+    return;
+  }
+
+  try {
+    const mutation = `
+      mutation CreateEmployee(
+        $nomEmployee: String!,
+        $emailEmployee: String!,
+        $passwordEmployee: String!,
+        $idEquipe: String,
+        $role: String!
+      ) {
+        createEmployee(
+          nomEmployee: $nomEmployee,
+          emailEmployee: $emailEmployee,
+          passwordEmployee: $passwordEmployee,
+          idEquipe: $idEquipe,
+          role: $role
+        ) {
+          idEmployee
+        }
       }
-    });
+    `;
+    const variables = {
+      nomEmployee: employee.value.nomEmployee,
+      emailEmployee: employee.value.emailEmployee,
+      passwordEmployee: employee.value.passwordEmployee,
+      idEquipe: employee.value.idEquipe || null,
+      role: employee.value.role,
+    };
+
+    const response = await axios.post('http://localhost:3000/graphql', { query: mutation, variables });
+    if (response.data.errors) {
+      throw new Error(response.data.errors[0].message);
+    }
+
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee added successfully', life: 3000 });
+    addEmployeeDialog.value = false;
+    fetchTaches();
+  } catch (error) {
+    console.error('Error saving employee:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to save employee', life: 3000 });
+  }
+};
+// Update the employee
+const updateEmployee = async () => {
+  submitted.value = true;
+  if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
+    return;
+  }
+
+  try {
+    const mutation = `
+      mutation UpdateEmployee(
+        $id: String!,
+        $nomEmployee: String,
+        $emailEmployee: String,
+        $role: String,
+        $idEquipe: String
+      ) {
+        updateEmployee(
+          id: $id,
+          nomEmployee: $nomEmployee,
+          emailEmployee: $emailEmployee,
+          role: $role,
+          idEquipe: $idEquipe
+        ) {
+          idEmployee
+        }
+      }
+    `;
+    const variables = {
+      id: employee.value.idEmployee,
+      nomEmployee: employee.value.nomEmployee,
+      emailEmployee: employee.value.emailEmployee,
+      role: employee.value.role,
+      idEquipe: employee.value.idEquipe || null, // Send null if no equipe is assigned
+    };
+
+    const response = await axios.post('http://localhost:3000/graphql', { query: mutation, variables });
 
     if (response.data.errors) {
       throw new Error(response.data.errors[0].message);
     }
 
-    if (response.data?.data?.employees?.employees) {
-      employees.value = response.data.data.employees.employees.map(emp => ({
-        ...emp,
-        disabledUntil: emp.disabledUntil ? new Date(emp.disabledUntil) : null
-      }));
-      teams.value = response.data.data.teams || [];
-    } else {
-      throw new Error('No employees data received');
-    }
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee updated successfully', life: 3000 });
+    editEmployeeDialog.value = false; // Close the dialog
+    fetchTaches(); // Refresh the employee list
   } catch (error) {
-    console.error("Error fetching employees:", error);
-    toast.add({ 
-      severity: 'error', 
-      summary: 'Error', 
-      detail: error.message || 'Failed to load employees', 
-      life: 5000 
-    });
-  } finally {
-    loading.value = false;
+    console.error('Error updating employee:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to update employee', life: 3000 });
   }
 };
 
-// Dialog functions
-const openNew = () => {
-  employee.value = {
-    nom_employee: '',
-    email_employee: '',
-    password_employee: '',
-    idEquipe: null,
-    role: ''
-  };
-  submitted.value = false;
-  addEmployeeDialog.value = true;
-};
-
-const openEdit = (emp) => {
-  employee.value = { ...emp };
-  editEmployeeDialog.value = true;
-};
-
-const confirmDeleteEmployee = (emp) => {
-  employee.value = emp;
-  deleteEmployeeDialog.value = true;
-};
-
-const openDisableDialog = (emp) => {
-  employee.value = emp;
-  disableUntilDate.value = emp.disabledUntil ? new Date(emp.disabledUntil) : null;
-  disableEmployeeDialog.value = true;
-};
-
-const openResetPasswordDialog = (emp) => {
-  employee.value = emp;
-  resetPasswordDialog.value = true;
-  newPassword.value = '';
-};
-
-// CRUD Operations
-const saveEmployee = async () => {
-  submitted.value = true;
-
-  const requiredFields = ['nom_employee', 'email_employee', 'role'];
-  const missingField = requiredFields.find(field => !employee.value[field]);
-
-  if (missingField) {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: `Please fill ${missingField.replace('_', ' ')}`, life: 3000 });
-    return;
-  }
-
-  try {
-    if (!employee.value.idEmployee) {
-      // Create employee
-      const mutation = `
-        mutation CreateEmployee(
-          $nomEmployee: String!,
-          $emailEmployee: String!,
-          $passwordEmployee: String!,
-          $idEquipe: String,
-          $role: String!,
-          $disabledUntil: String
-        ) {
-          createEmployee(
-            nomEmployee: $nomEmployee,
-            emailEmployee: $emailEmployee,
-            passwordEmployee: $passwordEmployee,
-            idEquipe: $idEquipe,
-            role: $role,
-            disabledUntil: $disabledUntil
-          ) {
-            idEmployee
-            nomEmployee
-            emailEmployee
-            role
-            idEquipe
-            disabledUntil
-          }
-        }
-      `;
-
-      const variables = {
-        nomEmployee: employee.value.nom_employee,
-        emailEmployee: employee.value.email_employee,
-        passwordEmployee: employee.value.password_employee,
-        idEquipe: employee.value.idEquipe,
-        role: employee.value.role,
-        disabledUntil: employee.value.disabledUntil ? employee.value.disabledUntil.toISOString() : null,
-      };
-
-      await axios.post('http://localhost:3000/graphql', { query: mutation, variables });
-
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Employee created', life: 3000 });
-    } else {
-      // Update employee
-      const mutation = `
-        mutation UpdateEmployee(
-          $id: String!,
-          $nomEmployee: String,
-          $emailEmployee: String,
-          $passwordEmployee: String,
-          $idEquipe: String,
-          $role: String,
-          $disabledUntil: String
-        ) {
-          updateEmployee(
-            id: $id,
-            nomEmployee: $nomEmployee,
-            emailEmployee: $emailEmployee,
-            passwordEmployee: $passwordEmployee,
-            idEquipe: $idEquipe,
-            role: $role,
-            disabledUntil: $disabledUntil
-          ) {
-            idEmployee
-            nomEmployee
-            emailEmployee
-            role
-            idEquipe
-            disabledUntil
-          }
-        }
-      `;
-
-      const variables = {
-        id: employee.value.idEmployee,
-        nomEmployee: employee.value.nom_employee,
-        emailEmployee: employee.value.email_employee,
-        idEquipe: employee.value.idEquipe,
-        role: employee.value.role,
-        disabledUntil: employee.value.disabledUntil ? employee.value.disabledUntil.toISOString() : null,
-      };
-
-      // Only include password if it's being changed
-      if (employee.value.password_employee) {
-        variables.passwordEmployee = employee.value.password_employee;
-      }
-
-      await axios.post('http://localhost:3000/graphql', { query: mutation, variables });
-
-      toast.add({ severity: 'success', summary: 'Success', detail: 'Employee updated', life: 3000 });
-    }
-
-    hideDialog();
-    fetchEmployees();
-  } catch (error) {
-    console.error("Error saving employee:", error);
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: error.response?.data?.errors?.[0]?.message || 'Operation failed',
-      life: 5000,
-    });
-  }
-};
-
+// Delete the employee
 const deleteEmployee = async () => {
   try {
     const mutation = `
@@ -269,36 +220,117 @@ const deleteEmployee = async () => {
         }
       }
     `;
-    
-    const response = await axios.post('http://localhost:3000/graphql', { 
+    const variables = {
+      id: employeeToDelete.value.idEmployee,
+    };
+
+    const response = await axios.post('http://localhost:3000/graphql', {
       query: mutation,
-      variables: { id: employee.value.idEmployee }
+      variables,
     });
-    
+
     if (response.data.errors) {
       throw new Error(response.data.errors[0].message);
     }
-    
-    toast.add({ 
-      severity: 'success', 
-      summary: 'Success', 
-      detail: response.data.data.deleteEmployee.message, 
-      life: 3000 
-    });
-    hideDialog();
-    fetchEmployees();
+
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee deleted successfully', life:
+3000 });
+    deleteEmployeeDialog.value = false; // Close the dialog
+    fetchTaches(); // Refresh the employee list
   } catch (error) {
-    console.error("Error deleting employee:", error);
-    toast.add({ 
-      severity: 'error', 
-      summary: 'Error', 
-      detail: error.message || 'Failed to delete employee', 
-      life: 5000 
-    });
+    const errorMessage = error.response?.data?.errors?.[0]?.message || 'Failed to delete employee';
+    toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 3000 });
   }
 };
 
+
+// Disable the employee
 const disableEmployee = async () => {
+  if (!disabledUntil.value) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please specify a disable date', life: 3000 });
+    return;
+  }
+
+  try {
+    const mutation = `
+      mutation DisableEmployee($id: String!, $disabledUntil: String!) {
+        updateEmployee(id: $id, disabledUntil: $disabledUntil) {
+          idEmployee
+        }
+      }
+    `;
+    const variables = {
+      id: employee.value.idEmployee,
+      disabledUntil: disabledUntil.value,
+    };
+
+    const response = await axios.post('http://localhost:3000/graphql', {
+      query: mutation,
+      variables,
+    });
+
+    if (response.data.errors) {
+      throw new Error(response.data.errors[0].message);
+    }
+
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Employee disabled successfully', life:
+3000 });
+    disableEmployeeDialog.value = false; // Close the dialog
+    fetchTaches(); // Refresh the employee list
+  } catch (error) {
+    const errorMessage = error.response?.data?.errors?.[0]?.message || 'Failed to disable employee';
+    toast.add({ severity: 'error', summary: 'Error', detail: errorMessage, life: 3000 });
+  }
+};
+
+
+// Open reset password dialog
+const openResetPasswordDialog = (emp) => {
+  employee.value = emp;
+  emailForReset.value = emp.emailEmployee; // Set the email for reset
+newPassword.value = ''; // Reset the new password field
+resetPasswordDialog.value = true; // Open the reset password dialog
+};
+// Send reset password email (mutation)
+const sendResetPasswordEmail = async () => {
+if (!newPassword.value) {
+toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please enter a new password', life: 3000 });
+return;
+}
+try {
+const response = await axios.post('http://localhost:3000/send-email', {
+email: emailForReset.value,
+password: newPassword.value,
+});
+toast.add({ severity: 'success', summary: 'Success', detail: 'Password reset email sent', life: 3000 });
+resetPasswordDialog.value = false;
+} catch (error) {
+toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to send password reset email', life:
+3000 });
+}
+};
+// Open edit dialog
+const openEdit = (emp) => {
+console.log('Editing Employee:', emp);
+employee.value = { ...emp }; // Populate the employee object with the selected employee's data
+submitted.value = false; // Reset the submitted state
+  editEmployeeDialog.value = true; // Open the edit dialog
+};
+
+
+// Open disable dialog
+const openDisableDialog = (employee) => {
+  selectedEmployeeId.value = employee.idEmployee;
+  selectedDisabledUntil.value = null; // Reset the date
+  disableDialogVisible.value = true;
+};
+
+const setDisabledUntil = async () => {
+  if (!selectedDisabledUntil.value) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please select a date', life: 3000 });
+    return;
+  }
+
   try {
     const mutation = `
       mutation UpdateEmployee($id: String!, $disabledUntil: String) {
@@ -308,147 +340,262 @@ const disableEmployee = async () => {
         }
       }
     `;
-    
+
     const variables = {
-      id: employee.value.idEmployee,
-      disabledUntil: disableUntilDate.value ? disableUntilDate.value.toISOString() : null
+      id: selectedEmployeeId.value,
+      disabledUntil: selectedDisabledUntil.value.toISOString(),
     };
-    
-    const response = await axios.post('http://localhost:3000/graphql', { 
-      query: mutation,
-      variables
-    });
-    
-    if (response.data.errors) {
-      throw new Error(response.data.errors[0].message);
-    }
-    
-    toast.add({ 
-      severity: 'success', 
-      summary: 'Success', 
-      detail: variables.disabledUntil 
-        ? `Account disabled until ${new Date(variables.disabledUntil).toLocaleDateString()}` 
-        : 'Account enabled',
-      life: 3000 
-    });
-    
-    hideDialog();
-    fetchEmployees();
-  } catch (error) {
-    console.error("Error updating account status:", error);
-    toast.add({ 
-      severity: 'error', 
-      summary: 'Error', 
-      detail: error.message || 'Failed to update status', 
-      life: 5000 
-    });
-  }
+const response = await axios.post('http://localhost:3000/graphql', {
+query: mutation,
+variables,
+});
+if (response.data.errors) {
+throw new Error(response.data.errors[0].message);
+}
+toast.add({ severity: 'success', summary: 'Success', detail: 'Disabled Until date set successfully', life:
+3000 });
+disableDialogVisible.value = false;
+// Refetch the employee list
+await fetchTaches();
+} catch (error) {
+console.error('Error setting Disabled Until:', error);
+toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to set Disabled Until date', life: 3000 });
+}
+};
+// Confirm delete employee
+const confirmDeleteEmployee = (emp) => {
+employeeToDelete.value = emp; // Store the employee to be deleted
+deleteEmployeeDialog.value = true; // Open the delete confirmation dialog
+};
+// Open send email dialog
+const openSendEmailDialog = (employeeId) => {
+selectedEmployeeId.value = employeeId;
+  emailSubject.value = '';
+  emailMessage.value = '';
+  sendEmailDialog.value = true;
 };
 
-const resetPassword = async () => {
-  if (!newPassword.value) {
-    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please enter new password', life: 3000 });
-    return;
-  }
-
-  try {
-    const mutation = `
-      mutation UpdateEmployee($id: String!, $passwordEmployee: String!) {
-        updateEmployee(id: $id, passwordEmployee: $passwordEmployee) {
-          idEmployee
-        }
-      }
-    `;
-    
-    const response = await axios.post('http://localhost:3000/graphql', { 
-      query: mutation,
-      variables: {
-        id: employee.value.idEmployee,
-        passwordEmployee: newPassword.value
-      }
-    });
-    
-    if (response.data.errors) {
-      throw new Error(response.data.errors[0].message);
-    }
-    
-    toast.add({ 
-      severity: 'success', 
-      summary: 'Success', 
-      detail: 'Password updated', 
-      life: 3000 
-    });
-    hideDialog();
-  } catch (error) {
-    console.error("Error resetting password:", error);
-    toast.add({ 
-      severity: 'error', 
-      summary: 'Error', 
-      detail: error.message || 'Failed to reset password', 
-      life: 5000 
-    });
-  }
+const confirmDeleteSelected = () => {
+    deleteProjectsDialog.value = true;
+    deleteSelectedProjects(); // Call the function to delete selected projects
+};
+const exportCSV = () => {
+    dt.value.exportCSV();
 };
 
-// Helper functions
+// Delete selected projects
+const deleteSelectedProjects = async () => {
+    try {
+        const deletePromises = selectedProjects.value.map((proj) => deleteProjetMutation({ id:
+proj.idProjet }));
+        await Promise.all(deletePromises);
+        await refetchProjects();
+        toast.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Selected projects deleted successfully',
+            life: 3000
+        });
+    } catch (error) {
+        console.error('Error deleting projects:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: error.message || 'Failed to delete selected projects',
+            life: 3000
+        });
+    } finally {
+        deleteProjectsDialog.value = false;
+        selectedProjects.value = [];
+    }
+};
+
+// Hide all dialogs
 const hideDialog = () => {
   addEmployeeDialog.value = false;
   editEmployeeDialog.value = false;
   deleteEmployeeDialog.value = false;
   disableEmployeeDialog.value = false;
   resetPasswordDialog.value = false;
+  sendEmailDialog.value = false;
   submitted.value = false;
 };
 
-const formatDate = (date) => {
-  return date ? new Date(date).toLocaleDateString() : 'Active';
-};
+// Confirm delete selected employees
+const confirmDeleteSelectedEmployees = async () => {
+  console.log('Selected Employees:', selectedEmployees.value); // Debugging
+  if (!selectedEmployees.value.length) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'No employees selected', life: 3000 });
+    return;
+  }
 
-const getTeamName = (idEquipe) => {
-  const team = teams.value.find(t => t.idEquipe === idEquipe);
-  return team ? team.nom_equipe : 'No team';
-};
+  try {
+    const deletePromises = selectedEmployees.value.map(emp => {
+      const mutation = `
+        mutation DeleteEmployee($id: String!) {
+          deleteEmployee(id: $id) {
+            success
+            message
+          }
+        }
+      `;
+      const variables = { id: emp.idEmployee };
+      return axios.post('http://localhost:3000/graphql', { query: mutation, variables });
+    });
 
-const filteredEmployees = computed(() => {
-  const query = searchQuery.value.toLowerCase();
-  return employees.value.filter(emp => 
-    emp.nom_employee.toLowerCase().includes(query) || 
-    emp.email_employee.toLowerCase().includes(query) ||
-    emp.role.toLowerCase().includes(query)
-  );
-});
-
-const confirmDeleteSelected = () => {
-  if (selectedEmployees.value.length) {
-    deleteEmployeeDialog.value = true;
+    await Promise.all(deletePromises);
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Selected employees deleted successfully', life: 3000 });
+    selectedEmployees.value = []; // Clear the selection
+    fetchTaches(); // Refresh the employee list
+  } catch (error) {
+    console.error('Error deleting employees:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete selected employees', life:
+3000 });
   }
 };
 
-const exportCSV = () => {
-  dt.value.exportCSV();
+onMounted(() => {
+  fetchTaches();
+  fetchEquipes();
+});
+const sendEmail = async () => {
+  if (!emailSubject.value || !emailMessage.value) {
+    toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in both subject and message', life: 3000 });
+    return;
+  }
+
+  try {
+    const mutation = `
+      mutation SendEmailToEmployee($id: String!, $subject: String!, $message: String!) {
+        sendEmailToEmployee(id: $id, subject: $subject, message: $message)
+      }
+    `;
+    const variables = {
+      id: selectedEmployeeId.value,
+      subject: emailSubject.value,
+      message: emailMessage.value,
+    };
+
+    const response = await axios.post('http://localhost:3000/graphql', {
+      query: mutation,
+      variables,
+    });
+
+    if (response.data.errors) {
+      throw new Error(response.data.errors[0].message);
+    }
+
+    // Close the dialog and show success message
+    sendEmailDialog.value = false; // Close the dialog
+    toast.add({ severity: 'success', summary: 'Success', detail: 'Email sent successfully', life: 3000 });
+  } catch (error) {
+    console.error('Error sending email:', error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to send email', life: 3000 });
+  }
 };
 
-onMounted(() => {
-  fetchEmployees();
+// Computed property to evaluate password strength
+const passwordStrength = computed(() => {
+  if (!employee.value.passwordEmployee) return '';
+  const password = employee.value.passwordEmployee;
+
+  // Weak: Less than 6 characters
+  if (password.length < 6) return 'Weak';
+
+  // Medium: At least 6 characters, includes letters and numbers
+  const hasLetters = /[a-zA-Z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  if (hasLetters && hasNumbers) return 'Medium';
+
+  // Strong: At least 8 characters, includes letters, numbers, and special characters
+  const hasSpecialChars = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  if (password.length >= 8 && hasLetters && hasNumbers && hasSpecialChars) return 'Strong';
+
+  return 'Weak';
 });
+
+// Function to determine the color of the password strength
+const passwordStrengthColor = computed(() => {
+  switch (passwordStrength.value) {
+    case 'Weak':
+      return 'red';
+    case 'Medium':
+      return 'orange';
+    case 'Strong':
+      return 'green';
+    default:
+      return '';
+  }
+});
+
+// Computed property for password strength class
+const passwordStrengthClass = computed(() => {
+  switch (passwordStrength.value) {
+    case 'Weak':
+      return 'weak';
+    case 'Medium':
+      return 'medium';
+    case 'Strong':
+      return 'strong';
+    default:
+      return '';
+  }
+});
+
+// Computed property for password strength width
+const passwordStrengthWidth = computed(() => {
+  switch (passwordStrength.value) {
+    case 'Weak':
+      return '33%';
+    case 'Medium':
+      return '66%';
+    case 'Strong':
+      return '100%';
+    default:
+      return '0%';
+  }
+});
+
+// Get equipe name by ID
+const getEquipeName = (idEquipe) => {
+  const equipe = equipes.value.find(e => e.idEquipe === idEquipe);
+  return equipe ? equipe.nom_equipe : '';
+};
+
+// Handle adding equipe
+const handleAddEquipe = () => {
+  if (selectedEquipe.value) {
+    employee.value.idEquipe = selectedEquipe.value;
+    selectedEquipe.value = null; // Reset the dropdown
+    toast.add({ severity: 'success', summary: 'Equipe Added', detail: 'Equipe assigned to employee', life: 3000 });
+  }
+};
+
+// Handle removing equipe
+const handleRemoveEquipe = () => {
+  employee.value.idEquipe = null; // Remove the equipe
+  toast.add({ severity: 'info', summary: 'Equipe Removed', detail: 'Equipe unassigned from employee', life: 3000 });
+};
 </script>
 
 <template>
-  <div class="p-4 employee-page">
+  <div class="employee-page p-4">
     <div class="card">
       <Toolbar class="mb-4">
         <template #start>
-          <Button label="New Employee" icon="pi pi-plus" class="mr-2" @click="openNew" />
-          <Button label="Delete" icon="pi pi-trash" severity="danger" @click="confirmDeleteSelected" :disabled="!selectedEmployees?.length" />
+          <Button label="New" icon="pi pi-plus" class="mr-2" @click="openNew" />
+          <Button
+            label="Delete"
+            icon="pi pi-trash"
+            severity="danger"
+            @click="confirmDeleteSelectedEmployees"
+            :disabled="!selectedEmployees.length"
+          />
         </template>
         <template #end>
           <Button label="Export" icon="pi pi-upload" @click="exportCSV" />
         </template>
       </Toolbar>
-
-      <div v-if="loading" class="flex align-items-center justify-content-center">
-        <ProgressSpinner style="width: 50px; height: 50px" />
-      </div>
 
       <DataTable
         ref="dt"
@@ -463,135 +610,322 @@ onMounted(() => {
         :rowsPerPageOptions="[5, 10, 25]"
         currentPageReportTemplate="Showing {first} to {last} of {totalRecords} employees"
       >
+        <template #loading>
+          <div class="flex align-items-center">
+            <ProgressSpinner style="width: 30px; height: 30px" />
+            <span class="ml-2">Loading employees...</span>
+          </div>
+        </template>
+
         <template #header>
           <div class="flex flex-wrap gap-2 align-items-center justify-content-between">
             <h4 class="m-0">Manage Employees</h4>
-            <span class="p-input-icon-left">
-              <i class="pi pi-search" />
-              <InputText v-model="searchQuery" placeholder="Search employees..." />
-            </span>
+            <IconField iconPosition="left">
+              <InputIcon>
+                <i class="pi pi-search" />
+              </InputIcon>
+              <InputText v-model="searchQuery" placeholder="Search by name..." class="p-inputtext-sm p
+mr-2" />
+            </IconField>
           </div>
         </template>
 
         <Column selectionMode="multiple" headerStyle="width: 3rem"></Column>
-        <Column field="nom_employee" header="Name" sortable></Column>
-        <Column field="email_employee" header="Email" sortable></Column>
-        <Column field="role" header="Role" sortable>
+        <Column field="nomEmployee" header="Name" sortable></Column>
+        <Column field="emailEmployee" header="Email" sortable></Column>
+        <Column field="role" header="Role" sortable></Column>
+        <Column field="disabledUntil" header="Disabled Until" sortable>
           <template #body="{ data }">
-            <Tag :value="data.role" :severity="data.role === 'ADMIN' ? 'danger' : data.role === 'MANAGER' ? 'warning' : 'info'" />
+            {{ data.disabledUntil ? new Date(data.disabledUntil).toLocaleDateString('en-US') : 'Active' }}
           </template>
         </Column>
-        <Column header="Team">
+        <Column field="idEquipe" header="Team">
           <template #body="{ data }">
-            {{ getTeamName(data.idEquipe) }}
+            {{ getEquipeName(data.idEquipe) || 'No Equipe Assigned' }}
           </template>
         </Column>
-        <Column field="disabledUntil" header="disabledUntil" sortable>
+        <Column header="Actions" headerStyle="width: 14rem">
           <template #body="{ data }">
-            <Tag :value="formatDate(data.disabledUntil)" :severity="data.disabledUntil && new Date(data.disabledUntil) > new Date() ? 'Active' : 'Desactive'" />
-          </template>
-        </Column>
-        <Column header="Actions" headerStyle="width: 10rem">
-          <template #body="{ data }">
-            <Button icon="pi pi-pencil" class="mr-2" outlined @click="openEdit(data)" />
-            <Button icon="pi pi-lock" class="mr-2" outlined @click="openDisableDialog(data)" />
-            <Button icon="pi pi-trash" severity="danger" outlined @click="confirmDeleteEmployee(data)" />
-            <Button icon="pi pi-envelope" class="p-button-rounded p-button-info" @click="openResetPasswordDialog(data)" />
-
+            <Button icon="pi pi-pencil" class="mr-2" severity="warning" outlined @click="openEdit(data)" />
+            <Button icon="pi pi-trash"  class="mr-2" severity="danger" outlined @click="confirmDeleteEmployee(data)" />
+            <Button icon="pi pi-envelope" class="mr-2" severity="info" outlined @click="openSendEmailDialog(data.idEmployee)" />
+            <Button icon="pi pi-calendar" class="mr-2" severity="secondary" outlined @click="openDisableDialog(data)" />
           </template>
         </Column>
       </DataTable>
     </div>
 
-    <!-- Dialogs -->
-    <Dialog v-model:visible="isEmployeeDialogVisible" :style="{ width: '700px' }" header="Employee Details" :modal="true" :closable="false">
-      <div class="flex flex-col gap-4">
+    <!-- Add Employee Dialog -->
+    <Dialog v-model:visible="addEmployeeDialog" header="Add New Employee" modal class="p-dialog-responsive" :style="{ width: '50%' }">
+      <div class="p-fluid">
         <div class="field">
-          <label for="name" class="font-bold block mb-2">Name *</label>
-          <InputText id="name" v-model.trim="employee.nom_employee" required autofocus :class="{ 'p-invalid': submitted && !employee.nom_employee }" class="w-full" />
-          <small v-if="submitted && !employee.nom_employee" class="p-error">Name is required.</small>
+          <label for="name">Name</label>
+          <InputText id="name" v-model="employee.nomEmployee" required class="p-inputtext-lg" />
         </div>
-
         <div class="field">
-          <label for="email" class="font-bold block mb-2">Email *</label>
-          <InputText id="email" v-model.trim="employee.email_employee" required :class="{ 'p-invalid': submitted && !employee.email_employee }" class="w-full" />
-          <small v-if="submitted && !employee.email_employee" class="p-error">Email is required.</small>
+          <label for="email">Email</label>
+          <InputText id="email" v-model="employee.emailEmployee" required type="email" class="p-inputtext-lg" />
         </div>
-
-        <div class="field" v-if="!employee.idEmployee">
+        <div class="field">
+          <label for="role">Role</label>
+          <InputText id="role" v-model="employee.role" required class="p-inputtext-lg" />
+        </div>
+        <div class="field">
           <label for="password" class="font-bold block mb-2">Password *</label>
-          <Password id="password" v-model="employee.password_employee" required toggleMask :class="{ 'p-invalid': submitted && !employee.password_employee }" class="w-full" />
-          <small v-if="submitted && !employee.password_employee" class="p-error">Password is required.</small>
-        </div>
-
-        <div class="field">
-          <label for="role" class="font-bold block mb-2">Role *</label>
-          <InputText 
-            id="role" 
-            v-model.trim="employee.role" 
-            required 
-            :class="{ 'p-invalid': submitted && !employee.role }" 
-            class="w-full" 
+          <Password
+            id="password"
+            v-model="employee.passwordEmployee"
+            required
+            toggleMask
+            :class="{ 'p-invalid': submitted && !employee.passwordEmployee }"
+            class="w-full"
           />
-          <small v-if="submitted && !employee.role" class="p-error">Role is required.</small>
+          <small v-if="submitted && !employee.passwordEmployee" class="p-error">Password is required.</small>
         </div>
 
+        <!-- Equipe Management Section -->
         <div class="field">
-          <label for="team" class="font-bold block mb-2">Team</label>
-          <Dropdown id="team" v-model="employee.idEquipe" :options="teams" optionLabel="nom_equipe" optionValue="idEquipe" placeholder="Select a Team" class="w-full" />
+          <label class="font-bold block mb-2">Equipe Management</label>
+          <div class="flex gap-2">
+            <Dropdown
+              v-model="selectedEquipe"
+              :options="equipes"
+              optionLabel="nom_equipe"
+              optionValue="idEquipe"
+              placeholder="Select an equipe"
+              class="w-full"
+            />
+            <Button
+              label="Add Equipe"
+              icon="pi pi-plus"
+              @click="handleAddEquipe"
+              :disabled="!selectedEquipe"
+            />
+          </div>
+          <div class="mt-4">
+            <h5 class="font-bold mb-2">Assigned Equipe</h5>
+            <div class="flex flex-wrap gap-2">
+              <Chip
+                v-if="employee.idEquipe"
+                :label="getEquipeName(employee.idEquipe)"
+                removable
+                @remove="handleRemoveEquipe"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text" @click="hideDialog" />
+        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text" @click="saveEmployee" />
+      </template>
+    </Dialog>
+
+    <!-- Edit Employee Dialog -->
+    <Dialog v-model:visible="editEmployeeDialog" header="Edit Employee" modal class="p-dialog-responsive" :style="{ width: '50%' }">
+      <div class="p-fluid">
+        <div class="field">
+          <label for="name">Name</label>
+          <InputText id="name" v-model="employee.nomEmployee" required class="p-inputtext-lg" />
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <InputText id="email" v-model="employee.emailEmployee" required type="email" class="p-inputtext-lg" />
+        </div>
+        <div class="field">
+          <label for="role">Role</label>
+          <InputText id="role" v-model="employee.role" required class="p-inputtext-lg" />
         </div>
 
+        <!-- Equipe Management Section -->
         <div class="field">
-          <label for="disabledUntil" class="font-bold block mb-2">Disabled Until</label>
-          <Calendar 
-            id="disabledUntil" 
-            v-model="employee.disabledUntil" 
-            :showIcon="true" 
-            class="w-full" 
-            placeholder="Select a date" 
-            dateFormat="yy-mm-dd" 
+          <label class="font-bold block mb-2">Equipe Management</label>
+          <div class="flex gap-2">
+            <Dropdown
+              v-model="selectedEquipe"
+              :options="equipes"
+              optionLabel="nom_equipe"
+              optionValue="idEquipe"
+              placeholder="Select an equipe"
+              class="w-full"
+            />
+            <Button
+              label="Add Equipe"
+              icon="pi pi-plus"
+              @click="handleAddEquipe"
+              :disabled="!selectedEquipe"
+            />
+          </div>
+          <div class="mt-4">
+            <h5 class="font-bold mb-2">Assigned Equipe</h5>
+            <div class="flex flex-wrap gap-2">
+              <Chip
+                v-if="employee.idEquipe"
+                :label="getEquipeName(employee.idEquipe)"
+                removable
+                @remove="handleRemoveEquipe"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" severity="secondary" class="p-button-text" @click="hideDialog" />
+        <Button label="Save" icon="pi pi-check" severity="success" class="p-button-text" @click="updateEmployee" />
+      </template>
+    </Dialog>
+
+    <!-- Reset Password Dialog -->
+    <Dialog v-model:visible="resetPasswordDialog" header="Reset Password" modal class="p-dialog
+responsive" :style="{ width: '30%' }">
+      <div class="p-fluid">
+        <div class="field">
+          <label for="email">Email</label>
+          <InputText id="email" v-model="emailForReset" disabled class="p-inputtext-lg" />
+        </div>
+        <div class="field">
+          <label for="newPassword">New Password</label>
+          <InputText id="newPassword" v-model="newPassword" required type="password" class="p
+inputtext-lg" />
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="hideDialog" />
+        <Button label="Send" icon="pi pi-check" class="p-button-text"
+@click="sendResetPasswordEmail" />
+      </template>
+    </Dialog>
+
+    <!-- Disable Employee Dialog -->
+    <Dialog v-model:visible="disableEmployeeDialog" header="Disable Employee" modal class="p
+dialog-responsive" :style="{ width: '30%' }">
+      <div class="p-fluid">
+        <div class="field">
+          <label for="disabledUntil">Disable Until</label>
+          <input
+            id="disabledUntil"
+            v-model="disabledUntil"
+            type="date"
+            class="p-inputtext-lg"
           />
         </div>
       </div>
 
       <template #footer>
-        <Button label="Cancel" icon="pi pi-times" @click="hideDialog" class="p-button-text" />
-        <Button label="Save" icon="pi pi-check" @click="saveEmployee" :loading="loading" autofocus />
+        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="hideDialog" />
+        <Button label="Disable" icon="pi pi-check" class="p-button-danger" @click="disableEmployee"
+/>
+      </template>
+    </Dialog>
+
+    <!-- Delete Employee Dialog -->
+    <!-- Delete Employee Dialog -->
+    <Dialog v-model:visible="deleteEmployeeDialog" header="Confirm" modal class="p-dialog
+responsive" :style="{ width: '30%' }">
+      <div class="confirmation-content">
+        <i class="pi pi-exclamation-triangle" style="font-size: 2rem"></i>
+        <span>Are you sure you want to delete <b>{{ employeeToDelete?.nomEmployee }}</b>?</span>
+      </div>
+
+      <template #footer>
+        <Button label="No" icon="pi pi-times" @click="deleteEmployeeDialog = false" class="p-button
+text" />
+        <Button label="Yes" icon="pi pi-check" @click="deleteEmployee" :loading="loading" class="p
+button-danger" />
+      </template>
+    </Dialog>
+
+    <!-- Send Email Dialog -->
+<Dialog v-model:visible="sendEmailDialog" header="Send Email" :modal="true" :style="{ width: '500px' }">
+  <div class="field">
+    <label for="subject" class="font-bold block mb-2">Subject</label>
+    <InputText
+      id="subject"
+      v-model="emailSubject"
+      class="w-full"
+      placeholder="Enter email subject"
+    />
+  </div>
+
+  <div class="field">
+    <label for="message" class="font-bold block mb-2">Message</label>
+    <Textarea
+      id="message"
+      v-model="emailMessage"
+      class="w-full"
+      rows="5"
+      placeholder="Enter email message"
+    />
+  </div>
+
+<template #footer>
+  <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="sendEmailDialog = false" />
+  <Button label="Send" icon="pi pi-send" class="p-button" @click="sendEmail" />
+</template>
+</Dialog>
+
+
+    <!-- Set Disabled Until Dialog -->
+    <Dialog v-model:visible="disableDialogVisible" header="Set Disabled Until" :modal="true" :style="{
+width: '400px' }">
+      <div class="field">
+        <label for="disabledUntil" class="font-bold block mb-2">Disabled Until</label>
+        <Calendar
+          id="disabledUntil"
+          v-model="selectedDisabledUntil"
+          :showIcon="true"
+          class="w-full"
+          placeholder="Select a date"
+          dateFormat="yy-mm-dd"
+        />
+      </div>
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" class="p-button-text" @click="disableDialogVisible =
+false" />
+        <Button label="Save" icon="pi pi-check" class="p-button" @click="setDisabledUntil" />
       </template>
     </Dialog>
   </div>
 </template>
 
 <style scoped>
-.employee-page .p-dialog .p-dialog-content {
-  padding: 1.5rem;
+.employee-page {
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
-.field {
-  margin-bottom: 1.5rem;
-}
-
-.p-error {
-  display: block;
-  margin-top: 0.5rem;
-  color: #f44336;
-  font-size: 0.875rem;
-}
-
-.flex.gap-2 {
-  display: flex;
-  gap: 0.5rem;
-}
 
 .card {
-  background: var(--surface-card);
-  padding: 2rem;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    background: var(--surface-card);
+    padding: 2rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.p-calendar:disabled {
-  opacity: 0.8;
-  background-color: #f5f5f5;
+
+.field {
+    margin-bottom: 1.5rem;
+}
+
+.p-fluid .field label {
+font-weight: bold;
+margin-bottom: 0.5rem;
+display: block;  /* Ensure labels are block-level elements */
+}
+.p-fluid .field .p-inputtext-lg {
+width: 100%;
+padding: 0.75rem;  /* Add padding for better spacing */
+font-size: 1rem;
+border-radius: 5px;
+}
+
+/* Add styles for the password strength feedback */
+small {
+  display: block;
+  margin-top: 0.5rem;
+  font-weight: bold;
 }
 </style>
