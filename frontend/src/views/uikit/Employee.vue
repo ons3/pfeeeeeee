@@ -352,6 +352,8 @@ const setDisabledUntil = async () => {
       disabledUntil: selectedDisabledUntil.value.toISOString(), // Ensure ISO format
     };
 
+    console.log('Mutation Variables:', variables); // Debugging
+
     const response = await axios.post('http://localhost:3000/graphql', {
       query: mutation,
       variables,
