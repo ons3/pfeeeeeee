@@ -595,8 +595,8 @@ const handleAddEquipe = () => {
 
 // Handle removing equipe
 const handleRemoveEquipe = () => {
-  employee.value.idEquipe = null; // Remove the equipe
-  toast.add({ severity: 'info', summary: 'Equipe Removed', detail: 'Equipe unassigned from employee', life: 3000 });
+  employee.value.idEquipe = null; // Remove the team
+  toast.add({ severity: 'info', summary: 'Team Removed', detail: 'Team unassigned from employee', life: 3000 });
 };
 </script>
 
