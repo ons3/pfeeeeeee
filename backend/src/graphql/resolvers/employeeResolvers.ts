@@ -188,19 +188,26 @@ export const employeeResolvers = {
     },
     updateEmployee: async (
       _: any,
-      { id, disabledUntil }: { id: string; disabledUntil?: string },
+      { id, nomEmployee, emailEmployee, role, idEquipe, disabledUntil }: { id: string; nomEmployee?: string; emailEmployee?: string; role?: string; idEquipe?: string; disabledUntil?: string },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        const request = pool.request().input('id', sql.UniqueIdentifier, id);
-
-        if (disabledUntil) {
-          request.input('disabledUntil', sql.DateTime, new Date(disabledUntil));
-        }
+        const request = pool.request()
+          .input('id', sql.UniqueIdentifier, id)
+          .input('nomEmployee', sql.VarChar, nomEmployee || null)
+          .input('emailEmployee', sql.VarChar, emailEmployee || null)
+          .input('role', sql.VarChar, role || null)
+          .input('idEquipe', sql.UniqueIdentifier, idEquipe || null)
+          .input('disabledUntil', sql.DateTime, disabledUntil ? new Date(disabledUntil) : null);
 
         await request.query(`
           UPDATE Employee
-          SET disabledUntil = @disabledUntil
+          SET
+            nom_employee = COALESCE(@nomEmployee, nom_employee),
+            email_employee = COALESCE(@emailEmployee, email_employee),
+            role = COALESCE(@role, role),
+            idEquipe = COALESCE(@idEquipe, idEquipe),
+            disabledUntil = @disabledUntil
           WHERE idEmployee = @id;
         `);
 
@@ -223,14 +230,14 @@ export const employeeResolvers = {
           emailEmployee: employee.email_employee,
           role: employee.role,
           idEquipe: employee.idEquipe,
-          disabledUntil: employee.disabledUntil ? new Date(employee.disabledUntil).toISOString() : null, // Convert to ISO string
+          disabledUntil: employee.disabledUntil ? employee.disabledUntil.toISOString() : null,
         };
       } catch (error) {
         console.error("Error updating employee:", error);
         throw new Error("Error updating employee");
       }
     },
-
+    
     deleteEmployee: async (_: any, { id }: { id: string }, { pool }: { pool: sql.ConnectionPool }) => {
       try {
         await pool.request()
