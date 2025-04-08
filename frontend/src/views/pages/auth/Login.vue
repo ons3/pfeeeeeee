@@ -95,7 +95,7 @@ onMounted(() => {
 
   script.onload = () => {
     window.google.accounts.id.initialize({
-      client_id: 'YOUR_GOOGLE_CLIENT_ID', // Replace with your Google Client ID
+      client_id:'17543999702-hf3su5dua5q1fuhfmeth5a6mgtf2acce.apps.googleusercontent.com', // Replace with your Google Client ID
       callback: handleGoogleLogin,
     });
 

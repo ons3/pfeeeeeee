@@ -46,12 +46,20 @@ const fetchTaches = async () => {
   try {
     const query = `
       query {
+<<<<<<< HEAD
         searchEmployees {
+=======
+        employees {
+          message
+>>>>>>> main
           employees {
             idEmployee
             nomEmployee
             emailEmployee
+<<<<<<< HEAD
             passwordEmployee
+=======
+>>>>>>> main
             role
             disabledUntil
             idEquipe
@@ -60,6 +68,7 @@ const fetchTaches = async () => {
       }
     `;
     const response = await axios.post('http://localhost:3000/graphql', { query });
+<<<<<<< HEAD
     if (response.data?.data?.searchEmployees?.employees) {
       taches.value = response.data.data.searchEmployees.employees.map(emp => ({
         ...emp,
@@ -72,6 +81,20 @@ throw new Error('Invalid response structure');
 console.error("Error fetching employees:", error);
 toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load employees', life: 3000 });
 }
+=======
+    if (response.data?.data?.employees?.employees) {
+      taches.value = response.data.data.employees.employees.map(emp => ({
+        ...emp,
+        disabledUntil: emp.disabledUntil ? new Date(emp.disabledUntil) : null, // Parse date or set null
+      }));
+    } else {
+      throw new Error('Invalid response structure');
+    }
+  } catch (error) {
+    console.error("Error fetching employees:", error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load employees', life: 3000 });
+  }
+>>>>>>> main
 };
 
 // Fetch equipes from the backend
@@ -161,6 +184,11 @@ const saveEmployee = async () => {
 // Update the employee
 const updateEmployee = async () => {
   submitted.value = true;
+<<<<<<< HEAD
+=======
+
+  // Validate required fields
+>>>>>>> main
   if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role) {
     toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
     return;
@@ -183,9 +211,17 @@ const updateEmployee = async () => {
           idEquipe: $idEquipe
         ) {
           idEmployee
+<<<<<<< HEAD
         }
       }
     `;
+=======
+          idEquipe
+        }
+      }
+    `;
+
+>>>>>>> main
     const variables = {
       id: employee.value.idEmployee,
       nomEmployee: employee.value.nomEmployee,
@@ -194,6 +230,11 @@ const updateEmployee = async () => {
       idEquipe: employee.value.idEquipe || null, // Send null if no equipe is assigned
     };
 
+<<<<<<< HEAD
+=======
+    console.log('Update Variables:', variables); // Debugging
+
+>>>>>>> main
     const response = await axios.post('http://localhost:3000/graphql', { query: mutation, variables });
 
     if (response.data.errors) {
@@ -311,9 +352,15 @@ toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to send passwor
 };
 // Open edit dialog
 const openEdit = (emp) => {
+<<<<<<< HEAD
 console.log('Editing Employee:', emp);
 employee.value = { ...emp }; // Populate the employee object with the selected employee's data
 submitted.value = false; // Reset the submitted state
+=======
+  console.log('Editing Employee:', emp); // Debugging
+  employee.value = { ...emp }; // Populate the employee object with the selected employee's data
+  submitted.value = false; // Reset the submitted state
+>>>>>>> main
   editEmployeeDialog.value = true; // Open the edit dialog
 };
 
@@ -343,6 +390,7 @@ const setDisabledUntil = async () => {
 
     const variables = {
       id: selectedEmployeeId.value,
+<<<<<<< HEAD
       disabledUntil: selectedDisabledUntil.value.toISOString(),
     };
 const response = await axios.post('http://localhost:3000/graphql', {
@@ -373,6 +421,53 @@ selectedEmployeeId.value = employeeId;
   emailSubject.value = '';
   emailMessage.value = '';
   sendEmailDialog.value = true;
+=======
+      disabledUntil: selectedDisabledUntil.value.toISOString(), // Ensure ISO format
+    };
+
+    console.log('Mutation Variables:', variables); // Debugging
+
+    const response = await axios.post('http://localhost:3000/graphql', {
+      query: mutation,
+      variables,
+    });
+
+    if (response.data.errors) {
+      throw new Error(response.data.errors[0].message);
+    }
+
+    toast.add({ 
+      severity: 'success', 
+      summary: 'Success', 
+      detail: 'Disabled Until date set successfully', 
+      life: 3000 
+    });
+    
+    disableDialogVisible.value = false;
+    await fetchTaches(); // Refresh the data
+
+  } catch (error) {
+    console.error('Error setting Disabled Until:', error);
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: 'Failed to set Disabled Until date', 
+      life: 3000 
+    });
+  }
+>>>>>>> main
+};
+// Confirm delete employee
+const confirmDeleteEmployee = (emp) => {
+employeeToDelete.value = emp; // Store the employee to be deleted
+deleteEmployeeDialog.value = true; // Open the delete confirmation dialog
+};
+// Open send email dialog
+const openSendEmailDialog = (employeeId) => {
+selectedEmployeeId.value = employeeId;
+  emailSubject.value = '';
+  emailMessage.value = '';
+  sendEmailDialog.value = true;
 };
 
 const confirmDeleteSelected = () => {
@@ -381,6 +476,7 @@ const confirmDeleteSelected = () => {
 };
 const exportCSV = () => {
     dt.value.exportCSV();
+<<<<<<< HEAD
 };
 
 // Delete selected projects
@@ -410,6 +506,37 @@ proj.idProjet }));
     }
 };
 
+=======
+};
+
+// Delete selected projects
+const deleteSelectedProjects = async () => {
+    try {
+        const deletePromises = selectedProjects.value.map((proj) => deleteProjetMutation({ id:
+proj.idProjet }));
+        await Promise.all(deletePromises);
+        await refetchProjects();
+        toast.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Selected projects deleted successfully',
+            life: 3000
+        });
+    } catch (error) {
+        console.error('Error deleting projects:', error);
+        toast.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: error.message || 'Failed to delete selected projects',
+            life: 3000
+        });
+    } finally {
+        deleteProjectsDialog.value = false;
+        selectedProjects.value = [];
+    }
+};
+
+>>>>>>> main
 // Hide all dialogs
 const hideDialog = () => {
   addEmployeeDialog.value = false;
@@ -558,8 +685,14 @@ const passwordStrengthWidth = computed(() => {
 
 // Get equipe name by ID
 const getEquipeName = (idEquipe) => {
+<<<<<<< HEAD
   const equipe = equipes.value.find(e => e.idEquipe === idEquipe);
   return equipe ? equipe.nom_equipe : '';
+=======
+  if (!idEquipe) return 'No Equipe Assigned'; // Handle null or undefined idEquipe
+  const equipe = equipes.value.find(e => e.idEquipe === idEquipe);
+  return equipe ? equipe.nom_equipe : 'No Equipe Assigned';
+>>>>>>> main
 };
 
 // Handle adding equipe
@@ -573,8 +706,13 @@ const handleAddEquipe = () => {
 
 // Handle removing equipe
 const handleRemoveEquipe = () => {
+<<<<<<< HEAD
   employee.value.idEquipe = null; // Remove the equipe
   toast.add({ severity: 'info', summary: 'Equipe Removed', detail: 'Equipe unassigned from employee', life: 3000 });
+=======
+  employee.value.idEquipe = null; // Remove the team
+  toast.add({ severity: 'info', summary: 'Team Removed', detail: 'Team unassigned from employee', life: 3000 });
+>>>>>>> main
 };
 </script>
 
@@ -636,7 +774,11 @@ mr-2" />
         <Column field="role" header="Role" sortable></Column>
         <Column field="disabledUntil" header="Disabled Until" sortable>
           <template #body="{ data }">
+<<<<<<< HEAD
             {{ data.disabledUntil ? new Date(data.disabledUntil).toLocaleDateString('en-US') : 'Active' }}
+=======
+            {{ data.disabledUntil ? data.disabledUntil.toLocaleDateString('en-US') : 'Active' }}
+>>>>>>> main
           </template>
         </Column>
         <Column field="idEquipe" header="Team">
@@ -869,12 +1011,20 @@ button-danger" />
 
 
     <!-- Set Disabled Until Dialog -->
+<<<<<<< HEAD
     <Dialog v-model:visible="disableDialogVisible" header="Set Disabled Until" :modal="true" :style="{
 width: '400px' }">
       <div class="field">
         <label for="disabledUntil" class="font-bold block mb-2">Disabled Until</label>
         <Calendar
           id="disabledUntil"
+=======
+    <Dialog v-model:visible="disableDialogVisible" header="Set Disabled Until" :modal="true" :style="{ width: '400px' }">
+      <div class="field">
+        <label for="disable-until">Disabled Until</label>
+        <Calendar
+          id="disable-until"
+>>>>>>> main
           v-model="selectedDisabledUntil"
           :showIcon="true"
           class="w-full"
@@ -908,6 +1058,28 @@ false" />
 
 .field {
     margin-bottom: 1.5rem;
+<<<<<<< HEAD
+}
+
+.p-fluid .field label {
+font-weight: bold;
+margin-bottom: 0.5rem;
+display: block;  /* Ensure labels are block-level elements */
+}
+.p-fluid .field .p-inputtext-lg {
+width: 100%;
+padding: 0.75rem;  /* Add padding for better spacing */
+font-size: 1rem;
+border-radius: 5px;
+}
+
+/* Add styles for the password strength feedback */
+small {
+  display: block;
+  margin-top: 0.5rem;
+  font-weight: bold;
+=======
+>>>>>>> main
 }
 
 .p-fluid .field label {
@@ -929,3 +1101,4 @@ small {
   font-weight: bold;
 }
 </style>
+

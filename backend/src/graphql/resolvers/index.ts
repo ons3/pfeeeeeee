@@ -15,7 +15,7 @@ export const resolvers = {
     ...adminResolvers.Query,
     ...alertResolvers.Query,
     ...suiviDeTempsResolvers.Query,
-    ...employeeResolvers.Query,
+    ...employeeResolvers.Query, // Ensure Query exists
   },
   Mutation: {
     ...projetResolvers.Mutation,
@@ -25,6 +25,6 @@ export const resolvers = {
     ...adminResolvers.Mutation,
     ...alertResolvers.Mutation,
     ...suiviDeTempsResolvers.Mutation,
-    ...employeeResolvers.Mutation,
+    ...(employeeResolvers.Mutation || {}), // Add fallback for Mutation
   },
 };

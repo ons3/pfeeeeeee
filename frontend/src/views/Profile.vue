@@ -13,7 +13,8 @@ const profile = ref({
     following: 0,
     posts: 0,
     profileImage: '/api/placeholder/200/200',
-    coverImage: '/api/placeholder/800/300'
+    coverImage: '/api/placeholder/800/300',
+    role: '', // Add role field
 });
 
 // Your personal skills or interests
@@ -45,16 +46,23 @@ const toggleContactModal = () => {
     isContactModalOpen.value = !isContactModalOpen.value;
 };
 
-// On mounted, retrieve the administrateur data from localStorage
+// On mounted, retrieve the user data from localStorage
 onMounted(() => {
     const administrateur = JSON.parse(localStorage.getItem('administrateur'));
+    const employee = JSON.parse(localStorage.getItem('employee'));
 
     if (administrateur) {
         // Update profile data based on the administrateur object from localStorage
         profile.value.name = administrateur.nom_administrateur;
         profile.value.email = administrateur.email_administrateur;
         profile.value.id = administrateur.idAdministrateur;
-        // You can add more fields based on your needs, e.g., profile.value.username
+        profile.value.role = administrateur.role || 'Admin'; // Set role from DB or default to 'Admin'
+    } else if (employee) {
+        // Update profile data based on the employee object from localStorage
+        profile.value.name = employee.nomEmployee;
+        profile.value.email = employee.emailEmployee;
+        profile.value.id = employee.idEmployee;
+        profile.value.role = employee.role || 'Employee'; // Set role from DB or default to 'Employee'
     }
 });
 </script>
@@ -69,13 +77,11 @@ onMounted(() => {
                 <img :src="profile.profileImage" alt="" class="profile-image" />
             </div>
             <div class="profile-info">
-                <h1 class="profile-name">{{ profile.name }}</h1>
-                <p class="profile-email">{{ profile.email }}</p>
-                <p class="profile-bio">{{ profile.id }}</p>
-
+               <h1 class="profile-name">{{ profile.name }}</h1>
+                <!--- <p class="profile-email">{{ profile.email }}</p>-->
                 <div class="profile-details">
                     <p><strong>📍 Localisation:</strong> Tunisie</p>
-                    <p><strong>💼 Profession:</strong> {{ profile.occupation }}</p>
+                    <p><strong>💼 Profession:</strong> {{ profile.role }}</p>
                 </div>
 
                 <button @click="toggleContactModal" class="contact-button">Me Contacter</button>

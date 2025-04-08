@@ -25,7 +25,7 @@ const httpLink = createHttpLink({
 const errorLink = onError(({ graphQLErrors, networkError }) => {
   if (graphQLErrors) {
     graphQLErrors.forEach(({ message, path }) => {
-      console.error(`[GraphQL error] Path: ${path}`, message);
+      console.error(`[GraphQL error] Path: ${path}, message: ${message}`);
     });
   }
 
@@ -74,3 +74,4 @@ app.provide(DefaultApolloClient, apolloClient);
 
 // Mount the app
 app.mount('#app');
+
