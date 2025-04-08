@@ -16,6 +16,25 @@ const EMPLOYEE_ID = '2c156683-2578-4e71-8463-2acaff034c09';
 const LOCAL_STORAGE_KEY = 'activeTimeTracking';
 const WEEKLY_GOAL_MINUTES = 40 * 60; // 40 hours in minutes
 
+<<<<<<< Updated upstream
+=======
+// Récupérer l'employé connecté depuis localStorage
+const employee = JSON.parse(localStorage.getItem('employee'));
+const EMPLOYEE_ID = employee?.idEmployee; // Utiliser l'ID de l'employé connecté
+const EMPLOYEE_NAME = employee?.nomEmployee || 'Unknown Employee'; // Replace 'nomEmployee' with the actual key for the employee's name
+
+const router = useRouter();
+
+if (!employee || !employee.idEmployee) {
+  router.push({ name: 'EmployeeLogin' }); // Redirige vers la page de connexion
+}
+
+// Vérifiez si l'ID de l'employé est disponible
+if (!EMPLOYEE_ID) {
+  console.error('Employee ID not found. Please log in.');
+}
+
+>>>>>>> Stashed changes
 // Composables
 const toast = useToast();
 const { timer, isRunning, startTimer, stopTimer, formatTime, pauseTimer, resumeTimer } = useTimer();
@@ -32,6 +51,7 @@ const resumedSessionStart = ref(null);
 const isTrackingLoading = ref(false);
 const isDeletingLoading = ref(false);
 const isExportingLoading = ref(false);
+const password = ref(localStorage.getItem('password') || ''); // Pre-fill the password if available
 
 // GraphQL Operations
 const { result: projectsResult } = useQuery(GET_PROJECTS);
@@ -262,12 +282,27 @@ const resumeTimerAction = () => {
 
 const confirmDelete = (entry) => {
     activeEntry.value = entry;
+    password.value = ''; // Pre-fill the password if available
     showDeleteDialog.value = true;
 };
 
 const deleteEntry = async () => {
+    if (!password.value) {
+        showError('Please enter your password to confirm deletion.');
+        return;
+    }
+
     try {
         isDeletingLoading.value = true;
+
+        // Retrieve the stored password from localStorage
+        const storedPassword = localStorage.getItem('password');
+        if (password.value !== storedPassword) {
+            showError('Invalid password. Please try again.');
+            return;
+        }
+
+        // Proceed with deletion if the password is valid
         await deleteTimeEntry({ id: activeEntry.value.id });
         showSuccess('Entry deleted successfully');
         await refetchTimeEntries();
@@ -275,7 +310,7 @@ const deleteEntry = async () => {
         handleGqlError(error, 'delete entry');
     } finally {
         isDeletingLoading.value = false;
-        showDeleteDialog.value = false;
+        showDeleteDialog.value = false; // Close the dialog
     }
 };
 
@@ -475,6 +510,10 @@ watch([isRunning, timer], ([newIsRunning, newTimer]) => {
         <!-- Header Section -->
         <div class="header">
             <h1>Time Tracking</h1>
+            <div class="employee-info">
+                
+                <p class="employee-name">Welcome , <strong>{{ EMPLOYEE_NAME }}</strong></p>
+            </div>
             <div class="week-navigation">
                 <Button icon="pi pi-chevron-left" @click="changeWeek(-1)" class="p-button-text" />
                 <span class="week-range">{{ formatDateRange(weekViewDate) }}</span>
@@ -640,22 +679,68 @@ watch([isRunning, timer], ([newIsRunning, newTimer]) => {
                 <i class="pi pi-exclamation-triangle p-mr-3" style="font-size: 2rem" />
                 <span>Are you sure you want to delete this time entry?</span>
             </div>
+            <div class="password-input">
+                <label for="password">Enter Password:</label>
+                <InputText v-model="password" id="password" type="password" placeholder="Password" />
+            </div>
             <template #footer>
                 <Button label="Cancel" icon="pi pi-times" @click="showDeleteDialog = false" class="p-button-text" />
-                <Button label="Delete" icon="pi pi-check" @click="deleteEntry" class="p-button-danger" autofocus />
+                <Button label="Delete" icon="pi pi-check" @click="deleteEntry" class="p-button-danger" :loading="isDeletingLoading" autofocus />
             </template>
         </Dialog>
     </div>
 </template>
 
 <style scoped>
-.time-tracking-container {
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background-color: var(--surface-card);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.employee-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.employee-avatar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 40px;
+    height: 40px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.employee-name {
+    font-size: 1.1rem;
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+.week-navigation {
+    display: flex;
+    align-items: center;
     gap: 1rem;
 }
 
 .week-range {
     font-weight: 600;
     color: var(--text-color-secondary);
+}
+
+.time-tracking-container {
+    gap: 1rem;
 }
 
 .tracker-section {
@@ -839,6 +924,18 @@ watch([isRunning, timer], ([newIsRunning, newTimer]) => {
     border-radius: 8px;
 }
 
+.password-input {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.password-input label {
+    font-weight: 600;
+    color: var(--text-color-secondary);
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;
@@ -880,4 +977,5 @@ watch([isRunning, timer], ([newIsRunning, newTimer]) => {
         width: 100%;
     }
 }
+
 </style>

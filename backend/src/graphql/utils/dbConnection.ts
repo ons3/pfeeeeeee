@@ -2,7 +2,11 @@ import sql, { ConnectionPool } from 'mssql';
 
 // SQL Server configuration
 const config = {
+<<<<<<< Updated upstream
   user: 'SA',
+=======
+  user: 'sa',
+>>>>>>> Stashed changes
   password: 'YourPassword123!',
 
   server: 'localhost',

@@ -66,7 +66,7 @@ onMounted(() => {
         <!-- Profile Header -->
         <div class="profile-header">
             <div class="profile-image-container">
-                <img :src="profile.profileImage" alt="Profile" class="profile-image" />
+                <img :src="profile.profileImage" alt="" class="profile-image" />
             </div>
             <div class="profile-info">
                 <h1 class="profile-name">{{ profile.name }}</h1>

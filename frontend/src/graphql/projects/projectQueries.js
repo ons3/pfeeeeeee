@@ -16,3 +16,16 @@ export const GET_PROJECTS = gql`
         }
     }
 `;
+
+export const GET_TEAM_PROJECTS = gql`
+    query GetTeamProjects($teamId: String!) {
+        projets(teamId: $teamId) {
+            idProjet
+            nom_projet
+            description_projet
+            date_debut_projet
+            date_fin_projet
+            statut_projet
+        }
+    }
+`;
