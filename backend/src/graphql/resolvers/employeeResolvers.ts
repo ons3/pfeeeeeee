@@ -188,31 +188,26 @@ export const employeeResolvers = {
     },
     updateEmployee: async (
       _: any,
-      { id, nomEmployee, emailEmployee, role, idEquipe }: { id: string; nomEmployee?: string; emailEmployee?: string; role?: string; idEquipe?: string },
+      { id, disabledUntil }: { id: string; disabledUntil?: string },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        const request = pool.request()
-          .input('id', sql.UniqueIdentifier, id)
-          .input('nomEmployee', sql.VarChar, nomEmployee || null) // Always declare the variable
-          .input('emailEmployee', sql.VarChar, emailEmployee || null) // Always declare the variable
-          .input('role', sql.VarChar, role || null) // Always declare the variable
-          .input('idEquipe', sql.UniqueIdentifier, idEquipe || null); // Always declare the variable
+        const request = pool.request().input('id', sql.UniqueIdentifier, id);
+
+        if (disabledUntil) {
+          request.input('disabledUntil', sql.DateTime, new Date(disabledUntil));
+        }
 
         await request.query(`
           UPDATE Employee
-          SET
-            nom_employee = COALESCE(@nomEmployee, nom_employee),
-            email_employee = COALESCE(@emailEmployee, email_employee),
-            role = COALESCE(@role, role),
-            idEquipe = @idEquipe -- Directly set idEquipe to null if it's null
+          SET disabledUntil = @disabledUntil
           WHERE idEmployee = @id;
         `);
 
         const updatedEmployee = await pool.request()
           .input('id', sql.UniqueIdentifier, id)
           .query(`
-            SELECT idEmployee, nom_employee, email_employee, role, idEquipe
+            SELECT idEmployee, nom_employee, email_employee, role, idEquipe, disabledUntil
             FROM Employee
             WHERE idEmployee = @id;
           `);
@@ -228,6 +223,7 @@ export const employeeResolvers = {
           emailEmployee: employee.email_employee,
           role: employee.role,
           idEquipe: employee.idEquipe,
+          disabledUntil: employee.disabledUntil ? new Date(employee.disabledUntil).toISOString() : null, // Convert to ISO string
         };
       } catch (error) {
         console.error("Error updating employee:", error);
