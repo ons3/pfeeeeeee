@@ -24,6 +24,7 @@ const teamToRemove = ref({ id: null, name: '' });
 const addingTeam = ref(false);
 const removingTeam = ref(false);
 const dropdownKey = ref(0);
+const adminPassword = ref(''); // Add this at the top of the script
 
 const filters = ref({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS }
@@ -330,6 +331,17 @@ const confirmDeleteProject = (proj) => {
 };
 
 const deleteProject = async () => {
+    if (!adminPassword.value) {
+        toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please enter your password', life: 3000 });
+        return;
+    }
+
+    const storedPassword = localStorage.getItem('password'); // Retrieve the admin password from localStorage
+    if (adminPassword.value !== storedPassword) {
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Invalid password. Please try again.', life: 3000 });
+        return;
+    }
+
     try {
         const { data } = await deleteProjetMutation({ id: project.value.idProjet });
         if (data?.deleteProjet?.success) {
@@ -353,7 +365,7 @@ const deleteProject = async () => {
         });
     } finally {
         deleteProjectDialog.value = false;
-        project.value = {};
+        adminPassword.value = ''; // Clear the password field
     }
 };
 
@@ -664,11 +676,18 @@ const handleRemoveTeam = async (teamId) => {
         </Dialog>
 
         <Dialog v-model:visible="deleteProjectDialog" :style="{ width: '450px' }" header="Confirm Deletion" :modal="true" :closable="false">
-            <div class="flex align-items-center gap-3">
-                <i class="pi pi-exclamation-triangle text-3xl text-red-500" />
-                <span v-if="project">
-                    Are you sure you want to delete project <b>{{ project.nom_projet }}</b>?
-                </span>
+            <div class="flex flex-col gap-3">
+                <div class="flex align-items-center gap-3">
+                    <i class="pi pi-exclamation-triangle text-3xl text-red-500" />
+                    <span v-if="project">
+                        Are you sure you want to delete project <b>{{ project.nom_projet }}</b>?
+                    </span>
+                </div>
+                <div class="field">
+                    <label for="adminPassword" class="font-bold block mb-2">Admin Password *</label>
+                    <Password id="adminPassword" v-model="adminPassword" toggleMask class="w-full" />
+                    
+                </div>
             </div>
             <template #footer>
                 <Button label="No" icon="pi pi-times" @click="deleteProjectDialog = false" class="p-button-text" />

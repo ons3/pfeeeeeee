@@ -65,20 +65,36 @@ export const projetResolvers = {
       }
     },
 
-    // Fetch all projects
-    projets: async (_: any, __: any, { pool }: { pool: sql.ConnectionPool }) => {
+    // Fetch all projects with optional team filter
+    projets: async (_: any, { teamId }: { teamId?: string }, { pool }: { pool: sql.ConnectionPool }) => {
       try {
-        const result = await pool.request().query(`
-          SELECT idProjet, nom_projet, description_projet, date_debut_projet, date_fin_projet, statut_projet
-          FROM Projet;
-        `);
+        let query = `
+          SELECT p.idProjet, p.nom_projet, p.description_projet, p.date_debut_projet, p.date_fin_projet, p.statut_projet
+          FROM Projet p
+          LEFT JOIN ProjetEquipe pe ON p.idProjet = pe.idProjet
+        `;
+        const conditions: string[] = [];
+        const inputs: { name: string; type: any; value: any }[] = [];
 
+        if (teamId) {
+          conditions.push("pe.idEquipe = @teamId");
+          inputs.push({ name: "teamId", type: sql.UniqueIdentifier, value: teamId });
+        }
+
+        if (conditions.length > 0) {
+          query += " WHERE " + conditions.join(" AND ");
+        }
+
+        const request = pool.request();
+        inputs.forEach((input) => request.input(input.name, input.type, input.value));
+
+        const result = await request.query(query);
         const projects = result.recordset;
 
         // Fetch associated teams for each project
         for (const project of projects) {
           const equipesResult = await pool.request()
-            .input('idProjet', sql.UniqueIdentifier, project.idProjet)
+            .input("idProjet", sql.UniqueIdentifier, project.idProjet)
             .query(`
               SELECT e.idEquipe, e.nom_equipe, e.description_equipe
               FROM Equipe e
@@ -91,8 +107,8 @@ export const projetResolvers = {
 
         return projects;
       } catch (error) {
-        console.error('Error fetching projects:', error);
-        throw new Error('Error fetching projects');
+        console.error("Error fetching projects:", error);
+        throw new Error("Failed to fetch projects");
       }
     },
 

@@ -36,10 +36,11 @@ const login = async () => {
     const { success, message, token, administrateur } = response.data.data.loginAdministrateur;
 
     if (success) {
-      // Store token and administrateur details in localStorage
+      // Store token, administrateur details, and password in localStorage
       localStorage.setItem('token', token); // Save token
       localStorage.setItem('administrateur', JSON.stringify(administrateur)); // Save administrateur details
-      //console.log('Administrateur:', administrateur);
+      localStorage.setItem('password', password.value); // Save the password for validation during delete operations
+
       // Redirect to Dashboard
       router.push({ name: 'Dashboard' });
     } else {

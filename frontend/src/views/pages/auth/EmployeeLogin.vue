@@ -37,9 +37,16 @@ const login = async () => {
     const { success, message, token, employee } = response.data.data.loginEmployee;
 
     if (success) {
+<<<<<<< HEAD
+      // Store token, employee details, and password in localStorage
+      localStorage.setItem('token', token);
+      localStorage.setItem('employee', JSON.stringify(employee));
+      localStorage.setItem('password', password.value); // Save the password
+=======
       // Store token and employee details in localStorage
       localStorage.setItem('token', token);
       localStorage.setItem('employee', JSON.stringify(employee));
+>>>>>>> main
 
       // Redirect to the dashboard
       router.push({ name: 'Dashboard' });

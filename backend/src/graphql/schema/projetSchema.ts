@@ -31,7 +31,7 @@ export const projetTypeDefs = gql`
   }
 
   extend type Query {
-    projets: [Projet!]!
+    projets(teamId: String): [Projet!]!
     projet(id: String!): Projet
     searchProjets(filters: ProjetFilterInput): [Projet!]!
   }

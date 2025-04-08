@@ -2,8 +2,17 @@ import sql, { ConnectionPool } from 'mssql';
 
 // SQL Server configuration
 const config = {
+<<<<<<< HEAD
+<<<<<<< Updated upstream
+  user: 'SA',
+=======
+  user: 'sa',
+>>>>>>> Stashed changes
+  password: 'YourPassword123!',
+=======
   user: 'sa',
   password: 'Ons17082001',
+>>>>>>> main
 
   server: 'localhost',
   database: 'time_tracking',
