@@ -17,6 +17,8 @@ type Admin = {
   nom_administrateur: string;
   email_administrateur: string;
   password_administrateur?: string;
+  role: string;
+  
 };
 
 // JWT Token generation
@@ -60,9 +62,10 @@ export const adminResolvers = {
 
         if (result.recordset.length === 0) {
           const id = crypto.randomUUID();
+          const defaultName = "Admin"; // Default name for the admin
           await pool.request()
             .input("id", sql.UniqueIdentifier, id)
-            .input("nom", sql.VarChar, "Admin")
+            .input("nom", sql.VarChar, defaultName)
             .input("email", sql.VarChar, ADMIN_EMAIL)
             .input("password", sql.VarChar, await bcrypt.hash(ADMIN_PASSWORD, 10))
             .query("INSERT INTO Administrateur (idAdministrateur, nom_administrateur, email_administrateur, password_administrateur, role) VALUES (@id, @nom, @email, @password, 'ADMIN')");
@@ -73,6 +76,9 @@ export const adminResolvers = {
         }
 
         const admin = result.recordset[0];
+        admin.nom_administrateur = admin.nom_administrateur || "Admin"; // Ensure the name is set
+        admin.role = "ADMIN"; // Explicitly set the role
+
         const token = generateToken(admin);
 
         return { success: true, message: "Connexion réussie", administrateur: admin, token };

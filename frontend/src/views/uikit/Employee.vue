@@ -46,12 +46,12 @@ const fetchTaches = async () => {
   try {
     const query = `
       query {
-        searchEmployees {
+        employees {
+          message
           employees {
             idEmployee
             nomEmployee
             emailEmployee
-            passwordEmployee
             role
             disabledUntil
             idEquipe
@@ -60,18 +60,18 @@ const fetchTaches = async () => {
       }
     `;
     const response = await axios.post('http://localhost:3000/graphql', { query });
-    if (response.data?.data?.searchEmployees?.employees) {
-      taches.value = response.data.data.searchEmployees.employees.map(emp => ({
+    if (response.data?.data?.employees?.employees) {
+      taches.value = response.data.data.employees.employees.map(emp => ({
         ...emp,
-        disabledUntil: emp.disabledUntil ? new Date(emp.disabledUntil) : null
+        disabledUntil: emp.disabledUntil ? new Date(emp.disabledUntil) : null, // Parse date or set null
       }));
-} else {
-throw new Error('Invalid response structure');
-}
-} catch (error) {
-console.error("Error fetching employees:", error);
-toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load employees', life: 3000 });
-}
+    } else {
+      throw new Error('Invalid response structure');
+    }
+  } catch (error) {
+    console.error("Error fetching employees:", error);
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to load employees', life: 3000 });
+  }
 };
 
 // Fetch equipes from the backend
@@ -161,6 +161,8 @@ const saveEmployee = async () => {
 // Update the employee
 const updateEmployee = async () => {
   submitted.value = true;
+
+  // Validate required fields
   if (!employee.value.nomEmployee || !employee.value.emailEmployee || !employee.value.role) {
     toast.add({ severity: 'warn', summary: 'Warning', detail: 'Please fill in all fields', life: 3000 });
     return;
@@ -183,9 +185,11 @@ const updateEmployee = async () => {
           idEquipe: $idEquipe
         ) {
           idEmployee
+          idEquipe
         }
       }
     `;
+
     const variables = {
       id: employee.value.idEmployee,
       nomEmployee: employee.value.nomEmployee,
@@ -193,6 +197,8 @@ const updateEmployee = async () => {
       role: employee.value.role,
       idEquipe: employee.value.idEquipe || null, // Send null if no equipe is assigned
     };
+
+    console.log('Update Variables:', variables); // Debugging
 
     const response = await axios.post('http://localhost:3000/graphql', { query: mutation, variables });
 
@@ -311,9 +317,9 @@ toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to send passwor
 };
 // Open edit dialog
 const openEdit = (emp) => {
-console.log('Editing Employee:', emp);
-employee.value = { ...emp }; // Populate the employee object with the selected employee's data
-submitted.value = false; // Reset the submitted state
+  console.log('Editing Employee:', emp); // Debugging
+  employee.value = { ...emp }; // Populate the employee object with the selected employee's data
+  submitted.value = false; // Reset the submitted state
   editEmployeeDialog.value = true; // Open the edit dialog
 };
 
@@ -343,24 +349,37 @@ const setDisabledUntil = async () => {
 
     const variables = {
       id: selectedEmployeeId.value,
-      disabledUntil: selectedDisabledUntil.value.toISOString(),
+      disabledUntil: selectedDisabledUntil.value.toISOString(), // Ensure ISO format
     };
-const response = await axios.post('http://localhost:3000/graphql', {
-query: mutation,
-variables,
-});
-if (response.data.errors) {
-throw new Error(response.data.errors[0].message);
-}
-toast.add({ severity: 'success', summary: 'Success', detail: 'Disabled Until date set successfully', life:
-3000 });
-disableDialogVisible.value = false;
-// Refetch the employee list
-await fetchTaches();
-} catch (error) {
-console.error('Error setting Disabled Until:', error);
-toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to set Disabled Until date', life: 3000 });
-}
+
+    const response = await axios.post('http://localhost:3000/graphql', {
+      query: mutation,
+      variables,
+    });
+
+    if (response.data.errors) {
+      throw new Error(response.data.errors[0].message);
+    }
+
+    toast.add({ 
+      severity: 'success', 
+      summary: 'Success', 
+      detail: 'Disabled Until date set successfully', 
+      life: 3000 
+    });
+    
+    disableDialogVisible.value = false;
+    await fetchTaches(); // Refresh the data
+
+  } catch (error) {
+    console.error('Error setting Disabled Until:', error);
+    toast.add({ 
+      severity: 'error', 
+      summary: 'Error', 
+      detail: 'Failed to set Disabled Until date', 
+      life: 3000 
+    });
+  }
 };
 // Confirm delete employee
 const confirmDeleteEmployee = (emp) => {
@@ -558,8 +577,9 @@ const passwordStrengthWidth = computed(() => {
 
 // Get equipe name by ID
 const getEquipeName = (idEquipe) => {
+  if (!idEquipe) return 'No Equipe Assigned'; // Handle null or undefined idEquipe
   const equipe = equipes.value.find(e => e.idEquipe === idEquipe);
-  return equipe ? equipe.nom_equipe : '';
+  return equipe ? equipe.nom_equipe : 'No Equipe Assigned';
 };
 
 // Handle adding equipe
@@ -636,7 +656,7 @@ mr-2" />
         <Column field="role" header="Role" sortable></Column>
         <Column field="disabledUntil" header="Disabled Until" sortable>
           <template #body="{ data }">
-            {{ data.disabledUntil ? new Date(data.disabledUntil).toLocaleDateString('en-US') : 'Active' }}
+            {{ data.disabledUntil ? data.disabledUntil.toLocaleDateString('en-US') : 'Active' }}
           </template>
         </Column>
         <Column field="idEquipe" header="Team">
@@ -869,12 +889,11 @@ button-danger" />
 
 
     <!-- Set Disabled Until Dialog -->
-    <Dialog v-model:visible="disableDialogVisible" header="Set Disabled Until" :modal="true" :style="{
-width: '400px' }">
+    <Dialog v-model:visible="disableDialogVisible" header="Set Disabled Until" :modal="true" :style="{ width: '400px' }">
       <div class="field">
-        <label for="disabledUntil" class="font-bold block mb-2">Disabled Until</label>
+        <label for="disable-until">Disabled Until</label>
         <Calendar
-          id="disabledUntil"
+          id="disable-until"
           v-model="selectedDisabledUntil"
           :showIcon="true"
           class="w-full"
@@ -929,4 +948,4 @@ small {
   font-weight: bold;
 }
 </style>
-localhost
+
