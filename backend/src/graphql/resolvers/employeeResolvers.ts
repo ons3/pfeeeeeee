@@ -32,7 +32,7 @@ export const employeeResolvers = {
             passwordEmployee: emp.password_employee,
             idEquipe: emp.idEquipe,
             role: emp.role,
-            disabledUntil: emp.disabledUntil,
+            disabledUntil: emp.disabledUntil ? new Date(emp.disabledUntil).toISOString() : null, // Convert to ISO string
           }))
         };
       } catch (error) {
@@ -61,7 +61,7 @@ export const employeeResolvers = {
           passwordEmployee: employee.password_employee,
           idEquipe: employee.idEquipe,
           role: employee.role,
-          disabledUntil: employee.disabledUntil
+          disabledUntil: employee.disabledUntil ? new Date(employee.disabledUntil).toISOString() : null, // Convert to ISO string
         };
       } catch (error) {
         console.error("Error fetching employee:", error);
@@ -188,66 +188,46 @@ export const employeeResolvers = {
     },
     updateEmployee: async (
       _: any,
-      { id, nomEmployee, emailEmployee, passwordEmployee, role, idEquipe, disabledUntil }: {
-        id: string;
-        nomEmployee?: string;
-        emailEmployee?: string;
-        passwordEmployee?: string;
-        role?: string;
-        idEquipe?: string;
-        disabledUntil?: string;
-      },
+      { id, nomEmployee, emailEmployee, role, idEquipe }: { id: string; nomEmployee?: string; emailEmployee?: string; role?: string; idEquipe?: string },
       { pool }: { pool: sql.ConnectionPool }
     ) => {
       try {
-        const currentEmployeeResult = await pool.request()
+        const request = pool.request()
+          .input('id', sql.UniqueIdentifier, id)
+          .input('nomEmployee', sql.VarChar, nomEmployee || null) // Always declare the variable
+          .input('emailEmployee', sql.VarChar, emailEmployee || null) // Always declare the variable
+          .input('role', sql.VarChar, role || null) // Always declare the variable
+          .input('idEquipe', sql.UniqueIdentifier, idEquipe || null); // Always declare the variable
+
+        await request.query(`
+          UPDATE Employee
+          SET
+            nom_employee = COALESCE(@nomEmployee, nom_employee),
+            email_employee = COALESCE(@emailEmployee, email_employee),
+            role = COALESCE(@role, role),
+            idEquipe = @idEquipe -- Directly set idEquipe to null if it's null
+          WHERE idEmployee = @id;
+        `);
+
+        const updatedEmployee = await pool.request()
           .input('id', sql.UniqueIdentifier, id)
           .query(`
-            SELECT nom_employee, email_employee, password_employee, role, idEquipe, disabledUntil
+            SELECT idEmployee, nom_employee, email_employee, role, idEquipe
             FROM Employee
             WHERE idEmployee = @id;
           `);
 
-        if (currentEmployeeResult.recordset.length === 0) {
-          throw new Error("Employee not found");
+        if (updatedEmployee.recordset.length === 0) {
+          throw new Error("Employee not found after update");
         }
 
-        const currentEmployee = currentEmployeeResult.recordset[0];
-
-        const updatedNomEmployee = nomEmployee ?? currentEmployee.nom_employee;
-        const updatedEmailEmployee = emailEmployee ?? currentEmployee.email_employee;
-        const updatedRole = role ?? currentEmployee.role;
-        const updatedIdEquipe = idEquipe ?? currentEmployee.idEquipe;
-        const updatedDisabledUntil = disabledUntil !== undefined ? new Date(disabledUntil) : currentEmployee.disabledUntil;
-        const updatedPassword = passwordEmployee ?? currentEmployee.password_employee;
-
-        await pool.request()
-          .input('id', sql.UniqueIdentifier, id)
-          .input('nomEmployee', sql.VarChar, updatedNomEmployee)
-          .input('emailEmployee', sql.VarChar, updatedEmailEmployee)
-          .input('role', sql.VarChar, updatedRole)
-          .input('idEquipe', sql.UniqueIdentifier, updatedIdEquipe)
-          .input('disabledUntil', sql.DateTime, updatedDisabledUntil)
-          .input('passwordEmployee', sql.VarChar, updatedPassword)
-          .query(`
-            UPDATE Employee
-            SET nom_employee = @nomEmployee,
-                email_employee = @emailEmployee,
-                password_employee = @passwordEmployee,
-                role = @role,
-                idEquipe = @idEquipe,
-                disabledUntil = @disabledUntil
-            WHERE idEmployee = @id;
-          `);
-
+        const employee = updatedEmployee.recordset[0];
         return {
-          idEmployee: id,
-          nomEmployee: updatedNomEmployee,
-          emailEmployee: updatedEmailEmployee,
-          passwordEmployee: updatedPassword,
-          role: updatedRole,
-          idEquipe: updatedIdEquipe,
-          disabledUntil: updatedDisabledUntil,
+          idEmployee: employee.idEmployee,
+          nomEmployee: employee.nom_employee,
+          emailEmployee: employee.email_employee,
+          role: employee.role,
+          idEquipe: employee.idEquipe,
         };
       } catch (error) {
         console.error("Error updating employee:", error);
